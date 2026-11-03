@@ -360,6 +360,22 @@ a:hover { color: var(--text-orange); }
   box-shadow: 0 8px 26px rgba(244, 63, 94, 0.6), 0 0 22px rgba(244, 63, 94, 0.35);
 }
 
+.btn-purple {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+}
+.btn-purple:hover {
+  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  box-shadow: 0 8px 26px rgba(124, 58, 237, 0.55);
+}
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
 /* Ghost Button Hover Glow */
 .btn-ghost {
   background: rgba(0, 23, 45, 0.55);
