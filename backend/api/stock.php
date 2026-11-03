@@ -1,0 +1,123 @@
+<?php
+require_once __DIR__ . '/../config/database.php';
+
+set_exception_handler(function($e) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => $e->getMessage()]);
+    exit;
+});
+
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
+
+$db = getDB();
+$method = $_SERVER['REQUEST_METHOD'];
+$action = $_GET['action'] ?? '';
+
+try {
+    switch ($method) {
+        case 'GET':
+            if ($action === 'list') {
+                $stmt = $db->query('SELECT * FROM sheet_stock ORDER BY material, gauge, sheet_size');
+                $rows = $stmt->fetchAll();
+                jsonResponse(['success' => true, 'data' => $rows]);
+            }
+            if ($action === 'summary') {
+                // Usage summary from bills
+                $stmt = $db->query("
+                    SELECT bf.material, bf.cnc_material, bf.gauge, bf.cnc_gauge, bf.sheet_size,
+                           SUM(bf.area) as total_area, COUNT(*) as item_count
+                    FROM bill_frames bf
+                    JOIN bills b ON b.id = bf.bill_id
+                    WHERE bf.bill_category IN ('cnc_only','cnc_pipe')
+                    GROUP BY bf.material, bf.cnc_material, bf.gauge, bf.cnc_gauge, bf.sheet_size
+                ");
+                jsonResponse(['success' => true, 'usage' => $stmt->fetchAll()]);
+            }
+            jsonResponse(['error' => 'Invalid action'], 400);
+
+        case 'POST':
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input) jsonResponse(['error' => 'Invalid JSON'], 400);
+
+            if ($action === 'add' || $action === 'update') {
+                $id = (int)($input['id'] ?? 0);
+                $mat = trim($input['material'] ?? '');
+                $gauge = trim($input['gauge'] ?? '');
+                $size = trim($input['sheet_size'] ?? '4x8');
+                $qty = (float)($input['quantity'] ?? 0);
+                $kg = (float)($input['kg_per_sheet'] ?? 0);
+                $notes = $input['notes'] ?? '';
+
+                if (!$mat || !$gauge) jsonResponse(['error' => 'Material and gauge required'], 400);
+
+                if ($id > 0) {
+                    // Explicit row edit — set absolute quantity
+                    $db->prepare('UPDATE sheet_stock SET material=?, gauge=?, sheet_size=?, quantity=?, kg_per_sheet=?, notes=? WHERE id=?')
+                       ->execute([$mat, $gauge, $size, $qty, $kg, $notes, $id]);
+                } else {
+                    // Same material + gauge + size → ADD to existing qty (not replace)
+                    $stmt = $db->prepare('SELECT id, quantity FROM sheet_stock WHERE material=? AND gauge=? AND sheet_size=?');
+                    $stmt->execute([$mat, $gauge, $size]);
+                    $exist = $stmt->fetch();
+                    if ($exist) {
+                        $newQty = (float)$exist['quantity'] + $qty;
+                        if ($kg > 0) {
+                            $db->prepare('UPDATE sheet_stock SET quantity=?, kg_per_sheet=?, notes=? WHERE id=?')
+                               ->execute([$newQty, $kg, $notes, $exist['id']]);
+                        } else {
+                            $db->prepare('UPDATE sheet_stock SET quantity=?, notes=? WHERE id=?')
+                               ->execute([$newQty, $notes, $exist['id']]);
+                        }
+                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
+                           ->execute([$exist['id'], null, $qty, 'Stock add']);
+                        $id = (int)$exist['id'];
+                    } else {
+                        $db->prepare('INSERT INTO sheet_stock (material, gauge, sheet_size, quantity, kg_per_sheet, notes) VALUES (?,?,?,?,?,?)')
+                           ->execute([$mat, $gauge, $size, $qty, $kg, $notes]);
+                        $id = (int)$db->lastInsertId();
+                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
+                           ->execute([$id, null, $qty, 'Stock add (new)']);
+                    }
+                }
+                jsonResponse(['success' => true, 'id' => $id]);
+            }
+
+            if ($action === 'adjust') {
+                $id = (int)($input['id'] ?? 0);
+                $delta = (float)($input['delta'] ?? 0);
+                $reason = $input['reason'] ?? 'Manual adjust';
+                if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
+
+                $db->beginTransaction();
+                $stmt = $db->prepare('SELECT * FROM sheet_stock WHERE id=? FOR UPDATE');
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                if (!$row) { $db->rollBack(); jsonResponse(['error' => 'Not found'], 404); }
+
+                $newQty = max(0, (float)$row['quantity'] + $delta);
+                $db->prepare('UPDATE sheet_stock SET quantity=? WHERE id=?')->execute([$newQty, $id]);
+                $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
+                   ->execute([$id, null, $delta, $reason]);
+                $db->commit();
+                jsonResponse(['success' => true, 'quantity' => $newQty]);
+            }
+
+            jsonResponse(['error' => 'Invalid action'], 400);
+
+        case 'DELETE':
+            $id = (int)($_GET['id'] ?? 0);
+            if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
+            $db->prepare('DELETE FROM sheet_stock WHERE id=?')->execute([$id]);
+            jsonResponse(['success' => true]);
+
+        default:
+            jsonResponse(['error' => 'Method not allowed'], 405);
+    }
+} catch (Exception $e) {
+    jsonResponse(['error' => $e->getMessage()], 500);
+}

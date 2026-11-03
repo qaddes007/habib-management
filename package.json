@@ -1,0 +1,75 @@
+{
+  "name": "s-habib-steel-desktop",
+  "version": "1.0.0",
+  "description": "S. HABIB STEEL & LASER CRAFT Management Desktop Application",
+  "author": "S. HABIB STEEL & LASER CRAFT",
+  "main": "electron-main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "release": "npm version patch && electron-builder --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.shabibsteel.management",
+    "productName": "S. HABIB STEEL & LASER CRAFT",
+    "copyright": "Copyright © 2026 S. HABIB STEEL & LASER CRAFT",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend"
+      },
+      {
+        "from": "frontend/dist",
+        "to": "frontend/dist"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
+      }
+    ],
+    "files": [
+      "electron-main.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/app-icon.ico",
+      "publish": {
+        "provider": "github",
+        "owner": "qaddes007",
+        "repo": "habib-management",
+        "releaseType": "release"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "S. HABIB STEEL & LASER CRAFT",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/app-icon.ico",
+      "uninstallerIcon": "assets/app-icon.ico",
+      "installerHeaderIcon": "assets/app-icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    }
+  }
+}
