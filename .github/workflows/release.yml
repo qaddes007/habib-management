@@ -38,6 +38,11 @@ jobs:
           $package = Get-Content package.json -Raw | ConvertFrom-Json
           $package.version = "1.0.${{ github.run_number }}"
           $package | ConvertTo-Json -Depth 100 | Set-Content package.json
+          $tag = "v$($package.version)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag $tag
+          git push origin $tag
 
       - name: Build and publish installer
         run: npx electron-builder --win nsis --publish always
