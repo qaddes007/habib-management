@@ -86,6 +86,17 @@ a:hover { color: var(--text-orange); }
   opacity: 0.8;
   white-space: nowrap;
 }
+.offline-notice {
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  padding: 8px 16px;
+  background: #7f1d1d;
+  color: #fff;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 .period-button.active {
   background: var(--text-orange);
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { API_BASE } from '../api/client'
+import { API_BASE, isApiOnline, setApiOnline } from '../api/client'
 
 const POLL_INTERVAL = 3000       // Poll every 3 seconds
 const SYNC_EVENT   = 'habib-sync' // Global window event name
@@ -17,22 +17,28 @@ export function useLiveSync() {
   const [lastSync,  setLastSync]  = useState(null)
   const lastToken = useRef(null)
   const timerRef  = useRef(null)
+  const pollInFlight = useRef(false)
 
   const poll = useCallback(async () => {
+    if (pollInFlight.current) return
+    pollInFlight.current = true
     try {
       const appToken = window.appSecurity?.apiToken
       const res  = await fetch(`${API_BASE}/sync.php`, {
         cache: 'no-store',
+        signal: AbortSignal.timeout(8000),
         headers: appToken ? { 'X-App-Token': appToken } : {},
       })
       if (!res.ok) throw new Error('Server error')
       const data = await res.json()
       if (!data.ok) throw new Error('Sync failed')
 
+      const wasOffline = !isApiOnline()
+      setApiOnline(true)
       setOnline(true)
       setLastSync(new Date())
 
-      if (lastToken.current !== null && lastToken.current !== data.token) {
+      if (wasOffline || (lastToken.current !== null && lastToken.current !== data.token)) {
         // Data changed on another machine — notify all pages
         window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { token: data.token } }))
         setSyncTick(t => t + 1)
@@ -40,7 +46,10 @@ export function useLiveSync() {
 
       lastToken.current = data.token
     } catch {
+      setApiOnline(false)
       setOnline(false)
+    } finally {
+      pollInFlight.current = false
     }
   }, [])
 

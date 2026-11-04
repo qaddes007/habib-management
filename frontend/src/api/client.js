@@ -1,5 +1,34 @@
 export const API_BASE = window.appSecurity?.apiBaseUrl || '/api';
 
+const API_CACHE_PREFIX = 'habib-api-cache:v1:';
+let apiOnline = true;
+
+export function isApiOnline() {
+  return apiOnline;
+}
+
+export function setApiOnline(online) {
+  apiOnline = online;
+}
+
+function getCachedResponse(key) {
+  try {
+    const cached = localStorage.getItem(key);
+    return cached === null ? null : JSON.parse(cached);
+  } catch (error) {
+    console.warn('Could not read saved offline data:', error);
+    return null;
+  }
+}
+
+function saveCachedResponse(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (error) {
+    console.warn('Could not save offline data on this device:', error);
+  }
+}
+
 export function fmt(n) {
   return 'PKR ' + Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -30,12 +59,25 @@ export const CNC_GAUGES = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28
 export const PIPE_GAUGES = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30];
 
 async function request(url, opts = {}) {
+  const method = (opts.method || 'GET').toUpperCase();
+  const cacheKey = API_CACHE_PREFIX + encodeURIComponent(API_BASE + url);
+  const cachedResponse = () => getCachedResponse(cacheKey);
+
+  if (method !== 'GET' && (!apiOnline || navigator.onLine === false)) {
+    throw new Error('Offline mode mein data change nahi ho sakta. Connection wapas aane par dobara try karein.');
+  }
+
+  if (method === 'GET' && (!apiOnline || navigator.onLine === false)) {
+    const cached = cachedResponse();
+    if (cached !== null) return cached;
+  }
+
   let res;
   try {
     const appToken = window.appSecurity?.apiToken;
     res = await fetch(API_BASE + url, {
       ...opts,
-      signal: opts.signal || AbortSignal.timeout(20000),
+      signal: opts.signal || AbortSignal.timeout(8000),
       headers: {
         'Content-Type': 'application/json',
         ...(appToken ? { 'X-App-Token': appToken } : {}),
@@ -43,12 +85,26 @@ async function request(url, opts = {}) {
       },
     });
   } catch (e) {
+    setApiOnline(false);
+    if (method === 'GET') {
+      const cached = cachedResponse();
+      if (cached !== null) return cached;
+    }
     if (e.name === 'TimeoutError' || e.name === 'AbortError') {
-      throw new Error('Server ne 20 seconds mein jawab nahi diya. Internet/Tailscale aur partner ka app check karke dobara try karein.');
+      throw new Error('Server se connection nahi ho raha. Is laptop par pehle load hua data hi offline dikhega; connection wapas aane par dobara try karein.');
     }
     throw new Error(API_BASE === '/api'
       ? 'API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)'
       : 'Shared server offline — check the host laptop, internet connection, and Tailscale.');
+  }
+  if (res.status >= 500) {
+    setApiOnline(false);
+    if (method === 'GET') {
+      const cached = cachedResponse();
+      if (cached !== null) return cached;
+    }
+  } else {
+    setApiOnline(true);
   }
   const text = await res.text();
   if (!text || !text.trim()) {
@@ -65,6 +121,7 @@ async function request(url, opts = {}) {
       : 'The shared server returned an invalid response. Check the Tailscale Serve address.');
   }
   if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
+  if (method === 'GET') saveCachedResponse(cacheKey, data);
   return data;
 }
 

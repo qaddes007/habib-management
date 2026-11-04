@@ -114,6 +114,12 @@ export default function App() {
         </div>
       </header>
 
+      {!online && (
+        <div className="offline-notice" role="status">
+          Offline — is laptop par pehle load hua saved data hi dikh sakta hai. Changes connection wapas aane tak band hain.
+        </div>
+      )}
+
       <Routes>
         <Route path="/"          element={<Dashboard toast={showToast} />} />
         <Route path="/new-bill"  element={<NewBill   toast={showToast} />} />

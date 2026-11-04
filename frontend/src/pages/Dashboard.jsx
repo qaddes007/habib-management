@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { api, fmt, CAT_LABELS } from '../api/client'
+import { api, fmt, CAT_LABELS, isApiOnline } from '../api/client'
 import { useAutoRefresh } from '../hooks/useLiveSync'
 
 function StatusBadge({ status }) {
@@ -31,6 +31,10 @@ export default function Dashboard({ toast }) {
     try {
       const result = await api.report(period)
       if (currentRequest !== requestId.current) return
+      if (!isApiOnline()) {
+        setSnapshot(previous => previous || { data: result, savedAt: null })
+        return
+      }
       const nextSnapshot = { data: result, savedAt: new Date().toISOString() }
       setSnapshot(nextSnapshot)
       localStorage.setItem(cacheKey, JSON.stringify(nextSnapshot))
@@ -65,7 +69,9 @@ export default function Dashboard({ toast }) {
             <strong>Dashboard offline.</strong>{' '}
             {snapshot?.savedAt
               ? `Pichla saved data ${new Date(snapshot.savedAt).toLocaleString('en-PK')} tak ka hai.`
-              : 'Abhi tak is laptop par dashboard ka saved data nahi hai.'}
+              : snapshot?.data
+                ? 'Is laptop par saved dashboard data dikh raha hai.'
+                : 'Abhi tak is laptop par dashboard ka saved data nahi hai.'}
             {' '}Internet/Tailscale wapas aaye to data khud refresh ho jayega.
             <button className="btn btn-blue btn-sm" style={{ marginLeft: 12 }} onClick={load} disabled={loading}>
               {loading ? 'Loading…' : 'Dobara koshish karein'}
