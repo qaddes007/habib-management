@@ -35,6 +35,7 @@ async function request(url, opts = {}) {
     const appToken = window.appSecurity?.apiToken;
     res = await fetch(API_BASE + url, {
       ...opts,
+      signal: opts.signal || AbortSignal.timeout(20000),
       headers: {
         'Content-Type': 'application/json',
         ...(appToken ? { 'X-App-Token': appToken } : {}),
@@ -42,6 +43,9 @@ async function request(url, opts = {}) {
       },
     });
   } catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      throw new Error('Server ne 20 seconds mein jawab nahi diya. Internet/Tailscale aur partner ka app check karke dobara try karein.');
+    }
     throw new Error(API_BASE === '/api'
       ? 'API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)'
       : 'Shared server offline — check the host laptop, internet connection, and Tailscale.');
