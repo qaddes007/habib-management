@@ -1,6 +1,7 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const http = require('http');
 const net = require('net');
 const { spawn } = require('child_process');
@@ -22,6 +23,7 @@ app.commandLine.appendSwitch('disable-http-cache');
 
 let mainWindow = null;
 let phpProcess = null;
+let appApiToken = null;
 
 const PORT = 8080;
 const DEFAULT_SERVER_URL = `http://127.0.0.1:${PORT}`;
@@ -149,29 +151,66 @@ function ensureMySQL() {
 // ============================================================
 // 3. Start PHP backend built-in server on port 8080
 // ============================================================
-function requestHealth(baseUrl) {
+function loadApiToken() {
+    const tokenPath = path.join(app.getPath('userData'), 'api-token');
+    fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+
+    try {
+        const token = fs.readFileSync(tokenPath, 'utf8').trim();
+        if (/^[a-f0-9]{64}$/.test(token)) return token;
+        throw new Error('The saved local API token is invalid.');
+    } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    try {
+        fs.writeFileSync(tokenPath, token, { flag: 'wx', mode: 0o600 });
+        return token;
+    } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+        const existingToken = fs.readFileSync(tokenPath, 'utf8').trim();
+        if (/^[a-f0-9]{64}$/.test(existingToken)) return existingToken;
+        throw new Error('The saved local API token is invalid.');
+    }
+}
+
+function requestHealth(baseUrl, token) {
     return new Promise(resolve => {
-        const req = http.get(`${baseUrl}/api/health`, res => {
+        const req = http.get(`${baseUrl}/api/health`, {
+            headers: { 'X-App-Token': token }
+        }, res => {
             let body = '';
             res.setEncoding('utf8');
             res.on('data', chunk => { body += chunk; });
             res.on('end', () => {
                 try {
                     const health = JSON.parse(body);
-                    resolve(res.statusCode === 200 && health.ok === true && health.app === 'S. HABIB Management API');
+                    const running = res.statusCode === 200 &&
+                        health.ok === true &&
+                        health.app === 'S. HABIB Management API';
+                    resolve({
+                        running,
+                        authenticated: running && health.authenticated === true
+                    });
                 } catch {
-                    resolve(false);
+                    resolve({ running: false, authenticated: false });
                 }
             });
         });
         req.setTimeout(3000, () => req.destroy());
-        req.on('error', () => resolve(false));
+        req.on('error', () => resolve({ running: false, authenticated: false }));
     });
 }
 
 function startPHP() {
     return (async () => {
-        if (await requestHealth(DEFAULT_SERVER_URL)) return;
+        appApiToken = loadApiToken();
+        const existingServer = await requestHealth(DEFAULT_SERVER_URL, appApiToken);
+        if (existingServer.authenticated) return;
+        if (existingServer.running) {
+            throw new Error('An unauthenticated PHP server is already using port 8080. Stop it and restart the app.');
+        }
 
         if (!fs.existsSync(PHP_EXE)) {
             throw new Error(
@@ -192,7 +231,8 @@ function startPHP() {
             windowsHide: true,
             env: {
                 ...process.env,
-                FRONTEND_DIST: FRONTEND_DIST
+                FRONTEND_DIST: FRONTEND_DIST,
+                APP_API_TOKEN: appApiToken
             }
         });
 
@@ -203,7 +243,12 @@ function startPHP() {
         });
         const deadline = Date.now() + 15000;
         while (Date.now() < deadline) {
-            if (await requestHealth(DEFAULT_SERVER_URL)) return;
+            const health = await requestHealth(DEFAULT_SERVER_URL, appApiToken);
+            if (health.authenticated) return;
+            if (health.running) {
+                phpProcess.kill();
+                throw new Error('An unauthenticated PHP server is already using port 8080. Stop it and restart the app.');
+            }
             await new Promise(resolve => setTimeout(resolve, 300));
             if (phpSpawnError) {
                 throw new Error(`Could not start PHP: ${phpSpawnError.message}`);
@@ -235,6 +280,8 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            preload: path.join(__dirname, 'preload.cjs'),
+            additionalArguments: [`--app-api-token=${appApiToken}`],
             cache: false
         }
     });
@@ -331,22 +378,26 @@ function initAutoUpdater() {
 // 6. Ensure Desktop Shortcut for standalone / portable runs
 // ============================================================
 function ensureDesktopShortcut() {
-    try {
-        const fs = require('fs');
-        const userProfile = process.env.USERPROFILE || 'C:\\Users\\PMLS';
-        const oneDriveDesktop = path.join(userProfile, 'OneDrive', 'Desktop');
-        const regularDesktop = path.join(userProfile, 'Desktop');
-        const targetDesktop = fs.existsSync(oneDriveDesktop) ? oneDriveDesktop : regularDesktop;
-        const shortcutPath = path.join(targetDesktop, 'S. HABIB STEEL.lnk');
+    if (process.platform !== 'win32') return;
 
-        if (!fs.existsSync(shortcutPath)) {
-            const vbsPath = path.join(__dirname, 'Create-Desktop-Shortcut.vbs');
-            if (fs.existsSync(vbsPath)) {
-                require('child_process').exec(`cscript //nologo "${vbsPath}"`, () => {});
-            }
+    try {
+        const shortcutPath = path.join(app.getPath('desktop'), 'S. HABIB STEEL.lnk');
+        const appPath = app.getAppPath();
+        const executablePath = app.getPath('exe');
+        const shortcutCreated = shell.writeShortcutLink(shortcutPath, 'replace', {
+            target: executablePath,
+            args: app.isPackaged ? '' : `"${appPath}"`,
+            cwd: app.isPackaged ? path.dirname(executablePath) : appPath,
+            description: 'S. HABIB STEEL & LASER CRAFT Management System',
+            icon: ICON_PATH,
+            iconIndex: 0
+        });
+
+        if (!shortcutCreated) {
+            console.warn(`[Shortcut] Could not create or update desktop shortcut at "${shortcutPath}".`);
         }
-    } catch (e) {
-        // Ignore shortcut errors
+    } catch (err) {
+        console.warn('[Shortcut] Could not repair the desktop shortcut:', err);
     }
 }
 

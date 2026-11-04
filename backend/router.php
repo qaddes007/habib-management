@@ -2,16 +2,6 @@
 // S. HABIB STEEL & LASER CRAFT — Unified Server Router
 // Handles /api/* calls and serves the React frontend (frontend/dist) with SPA fallback
 
-// Allow CORS for dev server support
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 // 1. API Routes
@@ -22,13 +12,21 @@ if (preg_match('#^/api/(bills|stock|expenses|reports|sync)\.php#', $uri, $m)) {
 
 // Health check
 if ($uri === '/api/health') {
+    require_once __DIR__ . '/security/request_guard.php';
+    enforceTrustedRequest();
     header('Content-Type: application/json');
-    echo json_encode(['ok' => true, 'app' => 'S. HABIB Management API']);
+    echo json_encode([
+        'ok' => true,
+        'app' => 'S. HABIB Management API',
+        'authenticated' => (bool)getenv('APP_API_TOKEN'),
+    ]);
     return true;
 }
 
 // Unknown API routes
 if (str_starts_with($uri, '/api/')) {
+    require_once __DIR__ . '/security/request_guard.php';
+    enforceTrustedRequest();
     http_response_code(404);
     header('Content-Type: application/json');
     echo json_encode(['error' => 'API endpoint not found']);

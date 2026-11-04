@@ -32,9 +32,14 @@ export const PIPE_GAUGES = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 2
 async function request(url, opts = {}) {
   let res;
   try {
+    const appToken = window.appSecurity?.apiToken;
     res = await fetch(BASE + url, {
-      headers: { 'Content-Type': 'application/json', ...opts.headers },
       ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(appToken ? { 'X-App-Token': appToken } : {}),
+        ...opts.headers,
+      },
     });
   } catch (e) {
     throw new Error('API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)');

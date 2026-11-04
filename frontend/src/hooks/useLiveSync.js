@@ -19,7 +19,11 @@ export function useLiveSync() {
 
   const poll = useCallback(async () => {
     try {
-      const res  = await fetch('/api/sync.php', { cache: 'no-store' })
+      const appToken = window.appSecurity?.apiToken
+      const res  = await fetch('/api/sync.php', {
+        cache: 'no-store',
+        headers: appToken ? { 'X-App-Token': appToken } : {},
+      })
       if (!res.ok) throw new Error('Server error')
       const data = await res.json()
       if (!data.ok) throw new Error('Sync failed')

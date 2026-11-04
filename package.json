@@ -39,6 +39,7 @@
     ],
     "files": [
       "electron-main.cjs",
+      "preload.cjs",
       "package.json"
     ],
     "win": {
@@ -62,7 +63,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "S. HABIB STEEL & LASER CRAFT",
+      "shortcutName": "S. HABIB STEEL",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "installerIcon": "assets/app-icon.ico",

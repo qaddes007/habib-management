@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/../security/request_guard.php';
+enforceTrustedRequest();
+
 /**
  * /api/sync.php — Live Sync Change-Token Endpoint
  * S. HABIB STEEL & LASER CRAFT

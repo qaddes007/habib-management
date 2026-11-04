@@ -79,6 +79,8 @@ To send the app to a client:
 
 The current desktop app still uses PHP and MySQL from XAMPP at `C:\xampp`. A client PC must have XAMPP installed and MySQL started before launching the app. A local app update does not install XAMPP or synchronize another PC's database: each PC currently has its own local database. Use a separate, secure database-hosting setup if both PCs must share live records.
 
+The packaged desktop app creates a per-user API token and requires it for local API requests. API origins are restricted to the desktop app and the localhost development ports. The development server does not require the desktop token.
+
 ### Company and payment settings
 
 The public source intentionally leaves phone, address, email, developer, and bank account fields blank in the sample SQL. Existing company rows are preserved by the schema import. To configure a new installation, set the `company` row in its local database before issuing bills.
