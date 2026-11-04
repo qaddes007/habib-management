@@ -898,6 +898,9 @@ input:focus, select:focus, textarea:focus {
     box-shadow: none !important;
     animation: none !important;
     transform: none !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
   }
 
   #printArea * {
@@ -916,7 +919,29 @@ input:focus, select:focus, textarea:focus {
 
   #printArea th,
   #printArea td {
-    border-color: #777 !important;
+    border-color: #444 !important;
+    padding: 6px 5px !important;
+  }
+
+  #printArea table {
+    font-size: 10pt !important;
+  }
+
+  #printArea small {
+    font-size: 9pt !important;
+  }
+
+  #printArea .gt-label {
+    font-size: 9pt !important;
+  }
+
+  #printArea .gt-value {
+    font-size: 13pt !important;
+  }
+
+  #printArea tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
 
