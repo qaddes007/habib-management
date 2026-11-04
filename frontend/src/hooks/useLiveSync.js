@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { API_BASE, isApiOnline, setApiOnline } from '../api/client'
+import { API_BASE, isApiOnline, setApiOnline, syncPendingChanges } from '../api/client'
 
 const POLL_INTERVAL = 3000       // Poll every 3 seconds
 const SYNC_EVENT   = 'habib-sync' // Global window event name
@@ -37,6 +37,7 @@ export function useLiveSync() {
       setApiOnline(true)
       setOnline(true)
       setLastSync(new Date())
+      await syncPendingChanges()
 
       if (wasOffline || (lastToken.current !== null && lastToken.current !== data.token)) {
         // Data changed on another machine — notify all pages

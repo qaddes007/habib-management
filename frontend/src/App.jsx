@@ -8,6 +8,7 @@ import Stock from './pages/Stock'
 import Expenses from './pages/Expenses'
 import Reports from './pages/Reports'
 import { useLiveSync } from './hooks/useLiveSync'
+import { getPendingChanges, retryPendingChanges } from './api/client'
 
 function Toast({ message, error, onClose }) {
   if (!message) return null
@@ -61,12 +62,19 @@ function LiveSyncBadge({ online, lastSync }) {
 export default function App() {
   const [toast, setToast] = useState({ msg: '', error: false })
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') === 'light' ? 'light' : 'dark')
+  const [pendingChanges, setPendingChanges] = useState(getPendingChanges)
   const { online, lastSync } = useLiveSync()
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    const refreshPending = () => setPendingChanges(getPendingChanges())
+    window.addEventListener('habib-outbox', refreshPending)
+    return () => window.removeEventListener('habib-outbox', refreshPending)
+  }, [])
 
   const showToast = useCallback((msg, error = false) => {
     setToast({ msg, error })
@@ -114,9 +122,21 @@ export default function App() {
         </div>
       </header>
 
+      {pendingChanges.length > 0 && (
+        <div className="offline-notice" role="status">
+          {pendingChanges.some(change => change.failed)
+            ? `${pendingChanges.length} change(s) upload nahi huay. Data is laptop par saved hai; error solve karke retry karein.`
+            : `${pendingChanges.length} change(s) is laptop par saved hain; connection milte hi shared server par sync hongay.`}
+          {online && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => retryPendingChanges()}>
+              Retry sync
+            </button>
+          )}
+        </div>
+      )}
       {!online && (
         <div className="offline-notice" role="status">
-          Offline — is laptop par pehle load hua saved data hi dikh sakta hai. Changes connection wapas aane tak band hain.
+          Offline — pehle load hua data dikh raha hai. Naye bills aur supported changes is laptop par محفوظ rahenge.
         </div>
       )}
 

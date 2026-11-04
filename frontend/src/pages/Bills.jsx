@@ -113,7 +113,10 @@ export default function Bills({ toast }) {
               )}
               {bills.map(b => (
                 <tr key={b.id}>
-                  <td><strong>#{b.sr_no}</strong></td>
+                  <td>
+                    <strong>{b.pending ? 'PENDING' : `#${b.sr_no}`}</strong>
+                    {b.pending_changes && <span className="badge badge-unpaid" style={{ marginLeft: 8 }}>Pending sync</span>}
+                  </td>
                   <td>{b.client_name}</td>
                   <td>{b.client_phone || '—'}</td>
                   <td>{fmt(b.net_total)}</td>
@@ -123,12 +126,12 @@ export default function Bills({ toast }) {
                   <td>{b.created_at?.slice(0, 16)}</td>
                   <td className="btn-group">
                     <Link to={`/bills/${b.id}`} className="btn btn-blue btn-sm">View</Link>
-                    <Link to={`/edit-bill/${b.id}`} className="btn btn-orange btn-sm">Edit</Link>
+                    {!b.pending && !b.pending_changes && <Link to={`/edit-bill/${b.id}`} className="btn btn-orange btn-sm">Edit</Link>}
                     <button className="btn btn-purple btn-sm"
                       onClick={() => openThermal(b.id)}>80mm</button>
                     <button className="btn btn-wa btn-sm"
                       onClick={() => shareBillWA(b.id)} title="Share on WhatsApp">WA Biz</button>
-                    <button className="btn btn-red btn-sm" onClick={() => del(b.id, b.sr_no)}>Del</button>
+                    <button className="btn btn-red btn-sm" onClick={() => del(b.id, b.sr_no)} disabled={b.pending || b.pending_changes}>Del</button>
                   </td>
                 </tr>
               ))}

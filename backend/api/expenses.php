@@ -58,12 +58,21 @@ try {
                 jsonResponse(['success' => true, 'id' => $id]);
             }
 
+            $mutationId = getOfflineMutationId();
+            ensureOfflineMutationColumn($db, $table);
+            if ($mutationId !== null) {
+                $existing = $db->prepare("SELECT id FROM `$table` WHERE offline_mutation_id=?");
+                $existing->execute([$mutationId]);
+                $saved = $existing->fetch();
+                if ($saved) jsonResponse(['success' => true, 'id' => (int)$saved['id']]);
+            }
+
             if ($type === 'personal') {
-                $db->prepare('INSERT INTO personal_expenses (description, amount, expense_date) VALUES (?,?,?)')
-                   ->execute([$desc, $amount, $date]);
+                $db->prepare('INSERT INTO personal_expenses (description, amount, expense_date, offline_mutation_id) VALUES (?,?,?,?)')
+                   ->execute([$desc, $amount, $date, $mutationId]);
             } else {
-                $db->prepare('INSERT INTO expenses (description, amount, category, expense_date) VALUES (?,?,?,?)')
-                   ->execute([$desc, $amount, $cat, $date]);
+                $db->prepare('INSERT INTO expenses (description, amount, category, expense_date, offline_mutation_id) VALUES (?,?,?,?,?)')
+                   ->execute([$desc, $amount, $cat, $date, $mutationId]);
             }
             jsonResponse(['success' => true, 'id' => (int)$db->lastInsertId()]);
 

@@ -118,7 +118,7 @@ export default function Dashboard({ toast }) {
                 )}
                 {(data?.recent_bills || []).map(b => (
                   <tr key={b.id}>
-                    <td><strong>#{b.sr_no}</strong></td>
+                    <td><strong>{b.pending ? 'PENDING' : `#${b.sr_no}`}</strong></td>
                     <td>{b.client_name}</td>
                     <td>{fmt(b.net_total)}</td>
                     <td><StatusBadge status={b.payment_status} /></td>

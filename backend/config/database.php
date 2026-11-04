@@ -78,6 +78,35 @@ function jsonResponse($data, int $code = 200): void {
     exit;
 }
 
+function ensureOfflineMutationColumn(PDO $db, string $table): void {
+    static $ready = [];
+    $allowed = ['bills', 'payment_history', 'expenses', 'personal_expenses', 'stock_log'];
+    if (!in_array($table, $allowed, true)) {
+        throw new InvalidArgumentException('Unsupported offline mutation table.');
+    }
+    if (isset($ready[$table])) return;
+
+    $column = $db->query("SHOW COLUMNS FROM `$table` LIKE 'offline_mutation_id'")->fetch();
+    if (!$column) {
+        $db->exec("ALTER TABLE `$table` ADD COLUMN offline_mutation_id VARCHAR(64) NULL");
+    }
+    $indexName = 'uq_' . $table . '_offline_mutation';
+    $index = $db->query("SHOW INDEX FROM `$table` WHERE Key_name = '$indexName'")->fetch();
+    if (!$index) {
+        $db->exec("ALTER TABLE `$table` ADD UNIQUE KEY `$indexName` (offline_mutation_id)");
+    }
+    $ready[$table] = true;
+}
+
+function getOfflineMutationId(): ?string {
+    $id = $_SERVER['HTTP_X_OFFLINE_MUTATION_ID'] ?? '';
+    if ($id === '') return null;
+    if (!preg_match('/^[A-Za-z0-9_-]{16,64}$/', $id)) {
+        jsonResponse(['error' => 'Invalid offline mutation ID.'], 400);
+    }
+    return $id;
+}
+
 function getCompany(): array {
     $db = getDB();
     $stmt = $db->query('SELECT * FROM company WHERE id = 1');

@@ -41,6 +41,15 @@ try {
             if (!$input) jsonResponse(['error' => 'Invalid JSON'], 400);
 
             if ($action === 'add' || $action === 'update') {
+                $mutationId = getOfflineMutationId();
+                ensureOfflineMutationColumn($db, 'stock_log');
+                if ($mutationId !== null) {
+                    $existing = $db->prepare('SELECT stock_id FROM stock_log WHERE offline_mutation_id=?');
+                    $existing->execute([$mutationId]);
+                    $saved = $existing->fetch();
+                    if ($saved) jsonResponse(['success' => true, 'id' => (int)$saved['stock_id']]);
+                }
+
                 $id = (int)($input['id'] ?? 0);
                 $mat = trim($input['material'] ?? '');
                 $gauge = trim($input['gauge'] ?? '');
@@ -51,13 +60,14 @@ try {
 
                 if (!$mat || !$gauge) jsonResponse(['error' => 'Material and gauge required'], 400);
 
+                $db->beginTransaction();
                 if ($id > 0) {
                     // Explicit row edit — set absolute quantity
                     $db->prepare('UPDATE sheet_stock SET material=?, gauge=?, sheet_size=?, quantity=?, kg_per_sheet=?, notes=? WHERE id=?')
                        ->execute([$mat, $gauge, $size, $qty, $kg, $notes, $id]);
                 } else {
                     // Same material + gauge + size → ADD to existing qty (not replace)
-                    $stmt = $db->prepare('SELECT id, quantity FROM sheet_stock WHERE material=? AND gauge=? AND sheet_size=?');
+                    $stmt = $db->prepare('SELECT id, quantity FROM sheet_stock WHERE material=? AND gauge=? AND sheet_size=? FOR UPDATE');
                     $stmt->execute([$mat, $gauge, $size]);
                     $exist = $stmt->fetch();
                     if ($exist) {
@@ -69,25 +79,38 @@ try {
                             $db->prepare('UPDATE sheet_stock SET quantity=?, notes=? WHERE id=?')
                                ->execute([$newQty, $notes, $exist['id']]);
                         }
-                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
-                           ->execute([$exist['id'], null, $qty, 'Stock add']);
+                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason, offline_mutation_id) VALUES (?,?,?,?,?)')
+                           ->execute([$exist['id'], null, $qty, 'Stock add', $mutationId]);
                         $id = (int)$exist['id'];
                     } else {
                         $db->prepare('INSERT INTO sheet_stock (material, gauge, sheet_size, quantity, kg_per_sheet, notes) VALUES (?,?,?,?,?,?)')
                            ->execute([$mat, $gauge, $size, $qty, $kg, $notes]);
                         $id = (int)$db->lastInsertId();
-                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
-                           ->execute([$id, null, $qty, 'Stock add (new)']);
+                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason, offline_mutation_id) VALUES (?,?,?,?,?)')
+                           ->execute([$id, null, $qty, 'Stock add (new)', $mutationId]);
                     }
                 }
+                $db->commit();
                 jsonResponse(['success' => true, 'id' => $id]);
             }
 
             if ($action === 'adjust') {
+                $mutationId = getOfflineMutationId();
+                ensureOfflineMutationColumn($db, 'stock_log');
                 $id = (int)($input['id'] ?? 0);
                 $delta = (float)($input['delta'] ?? 0);
                 $reason = $input['reason'] ?? 'Manual adjust';
                 if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
+                if ($mutationId !== null) {
+                    $existing = $db->prepare('SELECT stock_id FROM stock_log WHERE offline_mutation_id=?');
+                    $existing->execute([$mutationId]);
+                    $saved = $existing->fetch();
+                    if ($saved) {
+                        $quantity = $db->prepare('SELECT quantity FROM sheet_stock WHERE id=?');
+                        $quantity->execute([$saved['stock_id']]);
+                        jsonResponse(['success' => true, 'quantity' => (float)$quantity->fetchColumn()]);
+                    }
+                }
 
                 $db->beginTransaction();
                 $stmt = $db->prepare('SELECT * FROM sheet_stock WHERE id=? FOR UPDATE');
@@ -97,8 +120,8 @@ try {
 
                 $newQty = max(0, (float)$row['quantity'] + $delta);
                 $db->prepare('UPDATE sheet_stock SET quantity=? WHERE id=?')->execute([$newQty, $id]);
-                $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
-                   ->execute([$id, null, $delta, $reason]);
+                $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason, offline_mutation_id) VALUES (?,?,?,?,?)')
+                   ->execute([$id, null, $delta, $reason, $mutationId]);
                 $db->commit();
                 jsonResponse(['success' => true, 'quantity' => $newQty]);
             }
@@ -115,5 +138,6 @@ try {
             jsonResponse(['error' => 'Method not allowed'], 405);
     }
 } catch (Exception $e) {
+    if ($db->inTransaction()) $db->rollBack();
     jsonResponse(['error' => $e->getMessage()], 500);
 }

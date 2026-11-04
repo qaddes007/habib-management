@@ -55,14 +55,14 @@ export default function Stock({ toast }) {
     const qty = parseFloat(form.quantity) || 0
     if (qty <= 0) { toast('Quantity required', true); return }
     try {
-      await api.saveStock({
+      const result = await api.saveStock({
         material: form.material,
         gauge: form.gauge.includes('Gauge') ? form.gauge : form.gauge + ' Gauge',
         sheet_size: form.sheet_size,
         quantity: qty,
         kg_per_sheet: parseFloat(form.kg_per_sheet) || 0,
       })
-      toast('Stock saved')
+      toast(result.pending ? 'Stock saved on this laptop; it will sync later.' : 'Stock saved')
       setForm(emptyForm)
       loadStock()
     } catch (e) { toast(e.message, true) }
@@ -72,8 +72,8 @@ export default function Stock({ toast }) {
     const delta = prompt('Quantity change (+ add / - remove):')
     if (delta === null || delta === '') return
     try {
-      await api.adjustStock({ id, delta: parseFloat(delta), reason: 'Manual adjust' })
-      toast('Stock adjusted')
+      const result = await api.adjustStock({ id, delta: parseFloat(delta), reason: 'Manual adjust' })
+      toast(result.pending ? 'Stock adjustment saved on this laptop; it will sync later.' : 'Stock adjusted')
       loadStock()
     } catch (e) { toast(e.message, true) }
   }
@@ -340,7 +340,7 @@ export default function Stock({ toast }) {
                     const kg = parseFloat(s.kg_per_sheet) || 0
                     return (
                       <tr key={s.id}>
-                        <td>{s.material}</td>
+                        <td>{s.material}{(s.pending || s.pending_changes) && <span className="badge badge-unpaid" style={{ marginLeft: 8 }}>Pending sync</span>}</td>
                         <td>{s.sheet_size}</td>
                         <td>{s.gauge}</td>
                         <td><strong>{fmtNum(qty)}</strong></td>
@@ -348,8 +348,8 @@ export default function Stock({ toast }) {
                         <td>{fmtNum(qty * kg)}</td>
                         <td>{fmtNum(qty * area)}</td>
                         <td className="btn-group">
-                          <button className="btn btn-orange btn-sm" onClick={() => adjust(s.id)}>± Adjust</button>
-                          <button className="btn btn-red btn-sm" onClick={() => deleteStock(s.id, s.material + ' ' + s.gauge + ' ' + s.sheet_size)}>Delete</button>
+                          <button className="btn btn-orange btn-sm" onClick={() => adjust(s.id)} disabled={s.pending}>± Adjust</button>
+                          <button className="btn btn-red btn-sm" onClick={() => deleteStock(s.id, s.material + ' ' + s.gauge + ' ' + s.sheet_size)} disabled={s.pending || s.pending_changes}>Delete</button>
                         </td>
                       </tr>
                     )

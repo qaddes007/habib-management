@@ -133,12 +133,12 @@ function ExpensePanel({ type, title, toast }) {
             {rows.map(e => (
               <tr key={e.id} style={editId === e.id ? { background: 'rgba(249,115,22,0.12)' } : undefined}>
                 <td>{e.expense_date}</td>
-                <td>{e.description}</td>
+                <td>{e.description}{e.pending && <span className="badge badge-unpaid" style={{ marginLeft: 8 }}>Pending sync</span>}</td>
                 {type === 'business' && <td>{e.category || '—'}</td>}
                 <td>{fmt(e.amount)}</td>
                 <td className="btn-group">
-                  <button className="btn btn-blue btn-sm" onClick={() => startEdit(e)}>Edit</button>
-                  <button className="btn btn-red btn-sm" onClick={() => del(e.id)}>Del</button>
+                  <button className="btn btn-blue btn-sm" onClick={() => startEdit(e)} disabled={e.pending}>Edit</button>
+                  <button className="btn btn-red btn-sm" onClick={() => del(e.id)} disabled={e.pending}>Del</button>
                 </td>
               </tr>
             ))}

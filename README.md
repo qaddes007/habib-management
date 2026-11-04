@@ -99,6 +99,8 @@ This setup shares the partner's existing database; it does not merge another com
 6. Restart the client app. XAMPP's PHP is still needed locally to show the interface, but remote mode does not start the client's local MySQL. Bills, payments, stock, and reports go to the partner's shared server. A client computer's existing local database is left untouched and is not automatically merged.
 7. To stop sharing, close the host app or run `tailscale serve --https=443 off` on the host. Remove `remote-server.json` from a client to return that app to its own local database.
 
+When the shared server is temporarily unreachable, previously loaded data remains available on that laptop. New bills and payments, expenses, stock additions, and stock adjustments can be saved to that laptop's pending queue and sync when the host returns. Pending changes are not visible to other computers until synced. Editing or deleting existing records still requires a connection; do not uninstall or clear app data while changes are pending.
+
 The local API continues listening only on `127.0.0.1`; Tailscale Serve provides the private HTTPS path. The app requires a root HTTPS `*.ts.net` URL and a 64-character API token for remote mode. The packaged desktop app creates a per-user API token for local requests.
 
 ### Company and payment settings

@@ -48,8 +48,8 @@ export default function BillView({ toast }) {
     const amount = parseFloat(payAmount) || 0
     if (amount <= 0) { toast('Enter a valid amount', true); return }
     try {
-      await api.addPayment({ bill_id: parseInt(id), amount, note: payNote })
-      toast('Payment recorded')
+      const result = await api.addPayment({ bill_id: Number(bill.id), amount, note: payNote })
+      toast(result.pending ? 'Payment saved on this laptop; it will sync later.' : 'Payment recorded')
       setShowPay(false)
       load()
     } catch (e) {
@@ -77,8 +77,10 @@ export default function BillView({ toast }) {
         <span>Bill #{bill.sr_no} — {bill.client_name}</span>
         <div className="btn-group">
           <button className="btn btn-blue" onClick={() => window.print()}>🖨️ Print</button>
-          {!isBillLocked(bill) ? (
+          {!bill.pending && !bill.pending_changes && !isBillLocked(bill) ? (
             <button className="btn btn-orange" onClick={() => navigate('/edit-bill/' + bill.id)}>✏️ Edit</button>
+          ) : bill.pending || bill.pending_changes ? (
+            <span className="badge badge-unpaid">Pending sync</span>
           ) : (
             <span className="badge badge-unpaid" title="PAID bills older than 30 days cannot be edited">🔒 Locked</span>
           )}
@@ -93,6 +95,14 @@ export default function BillView({ toast }) {
           <Link to="/bills" className="btn btn-ghost">← Back</Link>
         </div>
       </div>
+
+      {(bill.pending || bill.pending_changes) && (
+        <div className="offline-notice" role="status">
+          {bill.pending
+            ? 'This bill is saved only on this laptop. Its final bill number will be assigned after syncing.'
+            : 'A payment for this bill is saved on this laptop and is waiting to sync.'}
+        </div>
+      )}
 
       <div className="card" id="printArea">
         <div style={{ textAlign: 'center', borderBottom: '2px solid var(--text-orange)', paddingBottom: 12, marginBottom: 16 }}>

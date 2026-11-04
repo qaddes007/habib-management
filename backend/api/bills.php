@@ -108,6 +108,18 @@ try {
             if ($action === 'create' || $action === 'update') {
                 $isUpdate = ($action === 'update');
                 $billId = $isUpdate ? (int)($input['id'] ?? 0) : 0;
+                $mutationId = $isUpdate ? null : getOfflineMutationId();
+                if (!$isUpdate) {
+                    ensureOfflineMutationColumn($db, 'bills');
+                }
+                if ($mutationId !== null) {
+                    $existing = $db->prepare('SELECT id, sr_no FROM bills WHERE offline_mutation_id=?');
+                    $existing->execute([$mutationId]);
+                    $savedBill = $existing->fetch();
+                    if ($savedBill) {
+                        jsonResponse(['success' => true, 'bill_id' => (int)$savedBill['id'], 'sr_no' => (int)$savedBill['sr_no']]);
+                    }
+                }
 
                 $clientName = trim($input['client_name'] ?? '');
                 if ($clientName === '') jsonResponse(['error' => 'Client name required'], 400);
@@ -116,6 +128,18 @@ try {
                 if (empty($frames)) jsonResponse(['error' => 'At least one frame required'], 400);
 
                 $db->beginTransaction();
+                if (!$isUpdate) {
+                    $db->query('SELECT id FROM company WHERE id=1 FOR UPDATE')->fetch();
+                    if ($mutationId !== null) {
+                        $existing = $db->prepare('SELECT id, sr_no FROM bills WHERE offline_mutation_id=?');
+                        $existing->execute([$mutationId]);
+                        $savedBill = $existing->fetch();
+                        if ($savedBill) {
+                            $db->commit();
+                            jsonResponse(['success' => true, 'bill_id' => (int)$savedBill['id'], 'sr_no' => (int)$savedBill['sr_no']]);
+                        }
+                    }
+                }
 
                 // Calculate totals
                 $grand = 0.0;
@@ -178,11 +202,11 @@ try {
                     $comp = getCompany();
                     $srNo = (int)($comp['next_sr_no'] ?? 1001);
 
-                    $stmt = $db->prepare('INSERT INTO bills (sr_no, client_name, client_phone, grand_total, discount, net_total, paid_amount, remaining_balance, payment_status, personal_total, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+                    $stmt = $db->prepare('INSERT INTO bills (sr_no, client_name, client_phone, grand_total, discount, net_total, paid_amount, remaining_balance, payment_status, personal_total, notes, offline_mutation_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
                     $stmt->execute([
                         $srNo, $clientName, trim($input['client_phone'] ?? ''),
                         $grand, $discount, $net, $paid, $remaining, $status, $personalTotal,
-                        $input['notes'] ?? ''
+                        $input['notes'] ?? '', $mutationId
                     ]);
                     $billId = (int)$db->lastInsertId();
 
@@ -271,6 +295,24 @@ try {
                 $amount = (float)($input['amount'] ?? 0);
                 $note = $input['note'] ?? 'Payment';
                 if ($billId <= 0 || $amount <= 0) jsonResponse(['error' => 'Invalid data'], 400);
+                $mutationId = getOfflineMutationId();
+                ensureOfflineMutationColumn($db, 'payment_history');
+                if ($mutationId !== null) {
+                    $existing = $db->prepare('SELECT id FROM payment_history WHERE offline_mutation_id=?');
+                    $existing->execute([$mutationId]);
+                    if ($existing->fetch()) {
+                        $current = $db->prepare('SELECT paid_amount, remaining_balance, payment_status FROM bills WHERE id=?');
+                        $current->execute([$billId]);
+                        $bill = $current->fetch();
+                        if (!$bill) jsonResponse(['error' => 'Bill not found'], 404);
+                        jsonResponse([
+                            'success' => true,
+                            'paid_amount' => (float)$bill['paid_amount'],
+                            'remaining' => (float)$bill['remaining_balance'],
+                            'status' => $bill['payment_status'],
+                        ]);
+                    }
+                }
 
                 $db->beginTransaction();
                 $stmt = $db->prepare('SELECT * FROM bills WHERE id=? FOR UPDATE');
@@ -284,8 +326,8 @@ try {
 
                 $db->prepare('UPDATE bills SET paid_amount=?, remaining_balance=?, payment_status=? WHERE id=?')
                    ->execute([$newPaid, $remaining, $status, $billId]);
-                $db->prepare('INSERT INTO payment_history (bill_id, amount, note) VALUES (?,?,?)')
-                   ->execute([$billId, $amount, $note]);
+                $db->prepare('INSERT INTO payment_history (bill_id, amount, note, offline_mutation_id) VALUES (?,?,?,?)')
+                   ->execute([$billId, $amount, $note, $mutationId]);
                 $db->commit();
                 jsonResponse(['success' => true, 'paid_amount' => $newPaid, 'remaining' => $remaining, 'status' => $status]);
             }
