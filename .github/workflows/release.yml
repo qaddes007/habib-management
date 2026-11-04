@@ -52,10 +52,18 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $tag = "${{ steps.release.outputs.tag }}"
-          git tag $tag
-          if ($LASTEXITCODE -ne 0) { throw "Could not create release tag $tag." }
-          git push origin $tag
-          if ($LASTEXITCODE -ne 0) { throw "Could not push release tag $tag." }
+          $tagRef = "refs/tags/$tag"
+          $existingRef = git ls-remote origin $tagRef
+          if ($LASTEXITCODE -ne 0) { throw "Could not check release tag $tag." }
+          if ($existingRef) {
+            $existingSha = ($existingRef -split '\s+')[0]
+            if ($existingSha -ne $env:GITHUB_SHA) {
+              throw "Release tag $tag already points to a different commit."
+            }
+          } else {
+            gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" -f ref=$tagRef -f sha=$env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { throw "Could not create release tag $tag." }
+          }
           gh release create $tag --draft --title $tag --notes "S. HABIB STEEL & LASER CRAFT desktop release $tag"
           if ($LASTEXITCODE -ne 0) { throw "Could not create draft release $tag." }
 
@@ -69,6 +77,28 @@ jobs:
           if (-not ($assets | Where-Object { $_.Name -eq 'latest.yml' })) {
             throw "electron-builder update metadata latest.yml was not produced."
           }
+
+          $metadata = Get-Content dist-electron/latest.yml -Raw
+          $metadataPath = [regex]::Match($metadata, '(?m)^path:\s*(.+)$').Groups[1].Value.Trim()
+          if (-not $metadataPath) {
+            throw "Could not read the installer path from latest.yml."
+          }
+          $metadataAsset = Join-Path dist-electron $metadataPath
+          if (-not (Test-Path $metadataAsset)) {
+            $installer = $assets | Where-Object { $_.Extension -eq '.exe' } | Select-Object -First 1
+            Copy-Item -LiteralPath $installer.FullName -Destination $metadataAsset
+            $blockmap = "$($installer.FullName).blockmap"
+            if (Test-Path $blockmap) {
+              Copy-Item -LiteralPath $blockmap -Destination "$metadataAsset.blockmap"
+            }
+          }
+          if (-not (Test-Path $metadataAsset)) {
+            throw "The installer path referenced by latest.yml was not produced."
+          }
+          $assets = @(Get-ChildItem dist-electron -File | Where-Object {
+            $_.Name -notlike '*uninstaller*' -and
+            ($_.Extension -eq '.exe' -or $_.Extension -eq '.yml' -or $_.Extension -eq '.blockmap')
+          })
 
           gh release upload $tag @($assets.FullName) --clobber
           if ($LASTEXITCODE -ne 0) { throw "Could not upload all installer and update assets." }
