@@ -33,6 +33,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Set unique release version
+        id: release
         shell: pwsh
         run: |
           $package = Get-Content package.json -Raw | ConvertFrom-Json
@@ -41,10 +42,38 @@ jobs:
           $tag = "v$($package.version)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag $tag
-          git push origin $tag
+          "tag=$tag" >> $env:GITHUB_OUTPUT
 
-      - name: Build and publish installer
-        run: npx electron-builder --win nsis --publish always
+      - name: Build Windows installer
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Publish installer and update metadata
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "${{ steps.release.outputs.tag }}"
+          git tag $tag
+          if ($LASTEXITCODE -ne 0) { throw "Could not create release tag $tag." }
+          git push origin $tag
+          if ($LASTEXITCODE -ne 0) { throw "Could not push release tag $tag." }
+          gh release create $tag --draft --title $tag --notes "S. HABIB STEEL & LASER CRAFT desktop release $tag"
+          if ($LASTEXITCODE -ne 0) { throw "Could not create draft release $tag." }
+
+          $assets = @(Get-ChildItem dist-electron -File | Where-Object {
+            $_.Name -notlike '*uninstaller*' -and
+            ($_.Extension -eq '.exe' -or $_.Extension -eq '.yml' -or $_.Extension -eq '.blockmap')
+          })
+          if (-not ($assets | Where-Object { $_.Extension -eq '.exe' })) {
+            throw "Windows installer was not produced in dist-electron."
+          }
+          if (-not ($assets | Where-Object { $_.Name -eq 'latest.yml' })) {
+            throw "electron-builder update metadata latest.yml was not produced."
+          }
+
+          gh release upload $tag @($assets.FullName) --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Could not upload all installer and update assets." }
+          gh release edit $tag --draft=false
+          if ($LASTEXITCODE -ne 0) { throw "Could not publish release $tag." }
+
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
