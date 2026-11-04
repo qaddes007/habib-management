@@ -6,6 +6,7 @@ export default function PrintSelector({ onClose, toast }) {
   const [bills, setBills] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [bill, setBill] = useState(null)
+  const [billLoading, setBillLoading] = useState(false)
   const [showThermal, setShowThermal] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -23,16 +24,26 @@ export default function PrintSelector({ onClose, toast }) {
   }, [])
 
   useEffect(() => {
-    if (!selectedId) { setBill(null); return }
+    let active = true
+    setBill(null)
+    if (!selectedId) {
+      setBillLoading(false)
+      return () => { active = false }
+    }
+    setBillLoading(true)
     api.getBill(selectedId)
-      .then(d => setBill(d.data))
-      .catch(e => toast?.(e.message, true))
+      .then(d => { if (active) setBill(d.data) })
+      .catch(e => { if (active) toast?.(e.message, true) })
+      .finally(() => { if (active) setBillLoading(false) })
+    return () => { active = false }
   }, [selectedId])
 
+  const selectedBill = bill && String(bill.id) === selectedId ? bill : null
+
   const printClient = () => {
-    if (!bill) return
+    if (!selectedBill) return
     // Navigate-style: open bill view print
-    window.open(`/bills/${bill.id}?print=1`, '_blank')
+    window.open(`/bills/${selectedBill.id}?print=1`, '_blank')
   }
 
   return (
@@ -63,31 +74,33 @@ export default function PrintSelector({ onClose, toast }) {
                 </select>
               </div>
 
-              {bill && (
+              {billLoading && <p className="text-muted">Loading selected bill…</p>}
+
+              {selectedBill && (
                 <div style={{
                   background: 'var(--card-inner)', borderRadius: 8, padding: 14,
                   fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 16,
                 }}>
-                  <div><strong>Client:</strong> {bill.client_name} (Phone: {bill.client_phone || '—'})</div>
-                  <div><strong>Date:</strong> {bill.created_at?.slice(0, 16)}</div>
+                  <div><strong>Client:</strong> {selectedBill.client_name} (Phone: {selectedBill.client_phone || '—'})</div>
+                  <div><strong>Date:</strong> {selectedBill.created_at?.slice(0, 16)}</div>
                   <div>
-                    Grand: {fmt(bill.grand_total)} | Discount: {fmt(bill.discount)}
+                    Grand: {fmt(selectedBill.grand_total)} | Discount: {fmt(selectedBill.discount)}
                   </div>
-                  <div><strong>Net (Client):</strong> {fmt(bill.net_total)}</div>
-                  <div>Paid: {fmt(bill.paid_amount)} | Due: {fmt(bill.remaining_balance)}</div>
-                  <div>Status: <strong>{bill.payment_status}</strong></div>
+                  <div><strong>Net (Client):</strong> {fmt(selectedBill.net_total)}</div>
+                  <div>Paid: {fmt(selectedBill.paid_amount)} | Due: {fmt(selectedBill.remaining_balance)}</div>
+                  <div>Status: <strong>{selectedBill.payment_status}</strong></div>
                 </div>
               )}
 
               <div className="btn-group" style={{ width: '100%' }}>
-                <button className="btn btn-blue" style={{ flex: 1 }} onClick={printClient} disabled={!bill}>
+                <button className="btn btn-blue" style={{ flex: 1 }} onClick={printClient} disabled={!selectedBill || billLoading}>
                   🖨️ Print Client Bill
                 </button>
-                <button className="btn btn-orange" style={{ flex: 1 }} onClick={printClient} disabled={!bill}>
+                <button className="btn btn-orange" style={{ flex: 1 }} onClick={printClient} disabled={!selectedBill || billLoading}>
                   🔒 Print Internal
                 </button>
                 <button className="btn btn-purple" style={{ flex: 1 }}
-                  onClick={() => setShowThermal(true)} disabled={!bill}>
+                  onClick={() => setShowThermal(true)} disabled={!selectedBill || billLoading}>
                   🧾 Thermal Print
                 </button>
               </div>
@@ -100,8 +113,8 @@ export default function PrintSelector({ onClose, toast }) {
         </div>
       </div>
 
-      {showThermal && bill && (
-        <ThermalPrint bill={bill} onClose={() => setShowThermal(false)} />
+      {showThermal && selectedBill && !billLoading && (
+        <ThermalPrint bill={selectedBill} onClose={() => setShowThermal(false)} />
       )}
     </>
   )

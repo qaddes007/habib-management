@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api, fmt, CAT_LABELS, shareWhatsApp, formatBillWhatsApp, shareAsImage } from '../api/client'
 import ThermalPrint from '../components/ThermalPrint'
@@ -20,6 +20,7 @@ export default function BillView({ toast }) {
   const navigate = useNavigate()
 
   const { id } = useParams()
+  const billRequest = useRef(0)
   const [bill, setBill] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPay, setShowPay] = useState(false)
@@ -28,14 +29,16 @@ export default function BillView({ toast }) {
   const [showThermal, setShowThermal] = useState(false)
 
   const load = useCallback(() => {
+    const requestId = ++billRequest.current
     setLoading(true)
     api.getBill(id)
       .then(d => {
+        if (requestId !== billRequest.current) return
         setBill(d.data)
         setPayAmount(d.data?.remaining_balance || '')
       })
-      .catch(e => toast(e.message, true))
-      .finally(() => setLoading(false))
+      .catch(e => { if (requestId === billRequest.current) toast(e.message, true) })
+      .finally(() => { if (requestId === billRequest.current) setLoading(false) })
   }, [id])
 
   useEffect(() => { load() }, [load])

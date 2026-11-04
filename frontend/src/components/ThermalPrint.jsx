@@ -16,20 +16,75 @@ export default function ThermalPrint({ bill, onClose }) {
   const printThermal = () => {
     const el = document.getElementById('thermal-print-area')
     if (!el) return
-    const w = window.open('', '_blank', 'width=320,height=700')
-    w.document.write(`<!DOCTYPE html><html><head><title>Thermal Bill #${bill.sr_no}</title>
-<style>
-  @page { size: 80mm auto; margin: 2mm; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 11px; width: 76mm; color: #000; background: #fff; padding: 4px; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  th, td { padding: 3px 2px; vertical-align: top; }
-  th { border-bottom: 1px solid #000; font-size: 8px; text-transform: uppercase; }
-  td { font-size: 9px; border-bottom: 1px dotted #ccc; }
-  @media print { body { width: 76mm; } .no-print { display: none !important; } }
-</style></head><body>${el.innerHTML}
-<script>window.onload=function(){window.print();}</script></body></html>`)
-    w.document.close()
+    const printWindow = window.open('', '_blank', 'width=380,height=700')
+    if (!printWindow) {
+      window.alert('Allow pop-ups for this app to print the 80mm bill.')
+      return
+    }
+
+    const printDocument = printWindow.document
+    printDocument.open()
+    printDocument.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>')
+    printDocument.title = `Thermal Bill #${bill.sr_no}`
+
+    const base = printDocument.createElement('base')
+    base.href = new URL('.', document.baseURI).href
+    printDocument.head.appendChild(base)
+
+    const style = printDocument.createElement('style')
+    style.textContent = `
+      @page { size: 80mm auto; margin: 2mm 0; }
+      * { box-sizing: border-box; }
+      html, body { width: 76mm; margin: 0; padding: 0; color: #000; background: #fff; }
+      body {
+        margin: 0 auto;
+        font: 12px/1.3 'Courier New', monospace;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      #thermal-print-area {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 2mm !important;
+        overflow: visible !important;
+        border-radius: 0 !important;
+        color: #000 !important;
+        background: #fff !important;
+      }
+      #thermal-text { width: 100%; }
+      #thermal-text table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      #thermal-text th, #thermal-text td {
+        padding: 2px 1px !important;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      #thermal-text th {
+        border-bottom: 1px solid #000 !important;
+        font-size: 9px !important;
+      }
+      #thermal-text td { font-size: 10px !important; }
+      #thermal-text [style*="font-size: 7px"] { font-size: 9px !important; }
+      #thermal-text [style*="font-size: 8px"] { font-size: 10px !important; }
+      #thermal-text img { max-width: 100%; }
+      #thermal-text img[alt="location"] { max-height: 25mm; object-fit: contain; }
+      #thermal-text tr { break-inside: avoid; page-break-inside: avoid; }
+    `
+    printDocument.head.appendChild(style)
+
+    const content = el.cloneNode(true)
+    content.querySelectorAll('img').forEach(image => {
+      const src = image.getAttribute('src')
+      if (src) image.src = new URL(src.replace(/^\/+/, ''), base.href).href
+      image.addEventListener('error', () => image.remove(), { once: true })
+    })
+    printDocument.body.appendChild(content)
+
+    printWindow.onload = () => {
+      printWindow.focus()
+      printWindow.print()
+    }
+    printDocument.close()
   }
 
   const copyText = () => {

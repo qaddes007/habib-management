@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, fmt, shareWhatsApp, formatBillWhatsApp, shareAsImage } from '../api/client'
 import PrintSelector from '../components/PrintSelector'
@@ -18,6 +18,7 @@ export default function Bills({ toast }) {
   const [loading, setLoading] = useState(true)
   const [showPrintSel, setShowPrintSel] = useState(false)
   const [thermalBill, setThermalBill] = useState(null)
+  const thermalRequest = useRef(0)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -42,11 +43,13 @@ export default function Bills({ toast }) {
   }
 
   const openThermal = async (id) => {
+    const requestId = ++thermalRequest.current
+    setThermalBill(null)
     try {
       const d = await api.getBill(id)
-      setThermalBill(d.data)
+      if (requestId === thermalRequest.current) setThermalBill(d.data)
     } catch (e) {
-      toast(e.message, true)
+      if (requestId === thermalRequest.current) toast(e.message, true)
     }
   }
 
