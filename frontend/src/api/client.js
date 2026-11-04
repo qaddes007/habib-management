@@ -1,4 +1,4 @@
-const BASE = '/api';
+export const API_BASE = window.appSecurity?.apiBaseUrl || '/api';
 
 export function fmt(n) {
   return 'PKR ' + Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -33,7 +33,7 @@ async function request(url, opts = {}) {
   let res;
   try {
     const appToken = window.appSecurity?.apiToken;
-    res = await fetch(BASE + url, {
+    res = await fetch(API_BASE + url, {
       ...opts,
       headers: {
         'Content-Type': 'application/json',
@@ -42,17 +42,23 @@ async function request(url, opts = {}) {
       },
     });
   } catch (e) {
-    throw new Error('API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)');
+    throw new Error(API_BASE === '/api'
+      ? 'API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)'
+      : 'Shared server offline — check the host laptop, internet connection, and Tailscale.');
   }
   const text = await res.text();
   if (!text || !text.trim()) {
-    throw new Error('Empty API response — check PHP server is running on port 8080 and MySQL is started');
+    throw new Error(API_BASE === '/api'
+      ? 'Empty API response — check PHP server is running on port 8080 and MySQL is started'
+      : 'Shared server returned an empty response — check that the host app and Tailscale are running.');
   }
   let data;
   try {
     data = JSON.parse(text);
   } catch (e) {
-    throw new Error('Invalid API response (not JSON). Is PHP server running? Open http://localhost:8080/api/health');
+    throw new Error(API_BASE === '/api'
+      ? 'Invalid API response (not JSON). Is PHP server running? Open http://localhost:8080/api/health'
+      : 'The shared server returned an invalid response. Check the Tailscale Serve address.');
   }
   if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
   return data;

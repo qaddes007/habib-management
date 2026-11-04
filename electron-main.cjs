@@ -24,9 +24,11 @@ app.commandLine.appendSwitch('disable-http-cache');
 let mainWindow = null;
 let phpProcess = null;
 let appApiToken = null;
+let remoteServerConfig = null;
 
 const PORT = 8080;
 const DEFAULT_SERVER_URL = `http://127.0.0.1:${PORT}`;
+const REMOTE_SERVER_CONFIG_PATH = path.join(app.getPath('userData'), 'remote-server.json');
 const XAMPP_ROOT = process.env.XAMPP_HOME || 'C:\\xampp';
 const PHP_EXE = path.join(XAMPP_ROOT, 'php', 'php.exe');
 const MYSQLD_EXE = path.join(XAMPP_ROOT, 'mysql', 'bin', 'mysqld.exe');
@@ -175,6 +177,54 @@ function loadApiToken() {
     }
 }
 
+function loadRemoteServerConfig() {
+    if (!fs.existsSync(REMOTE_SERVER_CONFIG_PATH)) return null;
+
+    let config;
+    try {
+        config = JSON.parse(fs.readFileSync(REMOTE_SERVER_CONFIG_PATH, 'utf8'));
+    } catch (err) {
+        throw new Error(`Could not read the remote server settings: ${err.message}`);
+    }
+
+    if (
+        !config ||
+        typeof config !== 'object' ||
+        Array.isArray(config) ||
+        typeof config.url !== 'string' ||
+        typeof config.token !== 'string'
+    ) {
+        throw new Error('Remote server settings must contain a URL and API token.');
+    }
+
+    let serverUrl;
+    try {
+        serverUrl = new URL(config.url);
+    } catch {
+        throw new Error('The remote server URL is invalid.');
+    }
+
+    if (
+        serverUrl.protocol !== 'https:' ||
+        !serverUrl.hostname.endsWith('.ts.net') ||
+        serverUrl.username ||
+        serverUrl.password ||
+        (serverUrl.pathname !== '/' && serverUrl.pathname !== '') ||
+        serverUrl.search ||
+        serverUrl.hash
+    ) {
+        throw new Error('The remote server URL must be the root HTTPS Tailscale Serve address.');
+    }
+    if (!/^[a-f0-9]{64}$/.test(config.token)) {
+        throw new Error('The remote server API token must be a 64-character hexadecimal token.');
+    }
+
+    return {
+        url: serverUrl.origin,
+        token: config.token
+    };
+}
+
 function requestHealth(baseUrl, token) {
     return new Promise(resolve => {
         const req = http.get(`${baseUrl}/api/health`, {
@@ -281,7 +331,10 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.cjs'),
-            additionalArguments: [`--app-api-token=${appApiToken}`],
+            additionalArguments: [
+                `--app-api-token=${remoteServerConfig?.token || appApiToken}`,
+                `--app-api-base=${remoteServerConfig ? `${remoteServerConfig.url}/api` : '/api'}`
+            ],
             cache: false
         }
     });
@@ -407,7 +460,8 @@ function ensureDesktopShortcut() {
 app.whenReady().then(async () => {
     try {
         ensureDesktopShortcut();
-        await ensureMySQL();
+        remoteServerConfig = loadRemoteServerConfig();
+        if (!remoteServerConfig) await ensureMySQL();
         await startPHP();
         createWindow();
         initAutoUpdater();

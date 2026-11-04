@@ -77,9 +77,29 @@ To send the app to a client:
 
 ### Existing runtime requirement
 
-The current desktop app still uses PHP and MySQL from XAMPP at `C:\xampp`. A client PC must have XAMPP installed and MySQL started before launching the app. A local app update does not install XAMPP or synchronize another PC's database: each PC currently has its own local database. Use a separate, secure database-hosting setup if both PCs must share live records.
+By default, each desktop app uses its own local XAMPP MySQL database. To share the partner's database between trusted computers without buying hosting, the partner's laptop can act as the host over a private Tailscale network. The host laptop must stay on, connected to the internet, and running the app. This option is for trusted staff: anyone given the shared API token can view and change business records.
 
-The packaged desktop app creates a per-user API token and requires it for local API requests. API origins are restricted to the desktop app and the localhost development ports. The development server does not require the desktop token.
+### Optional private Tailscale connection
+
+This setup shares the partner's existing database; it does not merge another computer's local database. Make a separate backup of both databases first. Decide which database is the master before connecting any client, and do not import the client's database over the partner's database.
+
+1. Install Tailscale on the partner's host laptop and each trusted client computer. Sign each device into the same private tailnet. Do not enable Tailscale Funnel, public port forwarding, or direct public MySQL access.
+2. On the host laptop, start XAMPP MySQL and the desktop app. Keep this laptop awake and online while others use the shared database.
+3. Open PowerShell on the host and run `tailscale serve --bg 8080`, then run `tailscale serve status` to see the private HTTPS address, such as `https://partner-device.example-tailnet.ts.net`. Follow Tailscale's prompt to enable HTTPS certificates if shown. Do not use `tailscale funnel`.
+4. On the host, copy the contents of `%APPDATA%\s-habib-steel-desktop\api-token` securely. This token gives full access to the business data; share it only with trusted staff using a private method, never in a public chat or repository.
+5. On each client, make sure the application update with remote-server support is installed, then create `%APPDATA%\s-habib-steel-desktop\remote-server.json` with this content, replacing both example values:
+
+   ```json
+   {
+     "url": "https://partner-device.example-tailnet.ts.net",
+     "token": "paste-the-host-api-token-here"
+   }
+   ```
+
+6. Restart the client app. XAMPP's PHP is still needed locally to show the interface, but remote mode does not start the client's local MySQL. Bills, payments, stock, and reports go to the partner's shared server. A client computer's existing local database is left untouched and is not automatically merged.
+7. To stop sharing, close the host app or run `tailscale serve --https=443 off` on the host. Remove `remote-server.json` from a client to return that app to its own local database.
+
+The local API continues listening only on `127.0.0.1`; Tailscale Serve provides the private HTTPS path. The app requires a root HTTPS `*.ts.net` URL and a 64-character API token for remote mode. The packaged desktop app creates a per-user API token for local requests.
 
 ### Company and payment settings
 

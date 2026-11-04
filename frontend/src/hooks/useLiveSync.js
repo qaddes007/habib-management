@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { API_BASE } from '../api/client'
 
 const POLL_INTERVAL = 3000       // Poll every 3 seconds
 const SYNC_EVENT   = 'habib-sync' // Global window event name
@@ -20,7 +21,7 @@ export function useLiveSync() {
   const poll = useCallback(async () => {
     try {
       const appToken = window.appSecurity?.apiToken
-      const res  = await fetch('/api/sync.php', {
+      const res  = await fetch(`${API_BASE}/sync.php`, {
         cache: 'no-store',
         headers: appToken ? { 'X-App-Token': appToken } : {},
       })
