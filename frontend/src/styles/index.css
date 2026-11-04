@@ -79,6 +79,13 @@ a:hover { color: var(--text-orange); }
   50% { transform: scale(1.04); box-shadow: 0 6px 28px rgba(255, 115, 0, 0.75), 0 0 35px rgba(255, 160, 0, 0.35); }
 }
 .theme-toggle { white-space: nowrap; }
+.app-version {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.3px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
 .period-button.active {
   background: var(--text-orange);
 }

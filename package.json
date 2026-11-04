@@ -1,6 +1,6 @@
 {
   "name": "s-habib-steel-desktop",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "description": "S. HABIB STEEL & LASER CRAFT Management Desktop Application",
   "author": "S. HABIB STEEL & LASER CRAFT",
   "main": "electron-main.cjs",

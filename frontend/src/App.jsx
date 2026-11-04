@@ -93,6 +93,7 @@ export default function App() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span className="app-version">v{__APP_VERSION__}</span>
           <LiveSyncBadge online={online} lastSync={lastSync} />
           <button
             type="button"

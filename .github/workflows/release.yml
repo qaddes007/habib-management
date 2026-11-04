@@ -21,17 +21,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
-      - name: Install desktop dependencies
-        run: npm install --no-audit --no-fund
-
       - name: Set unique release version
         id: release
         shell: pwsh
@@ -43,6 +32,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install desktop dependencies
+        run: npm install --no-audit --no-fund
 
       - name: Build Windows installer
         run: npx electron-builder --win nsis --publish never
