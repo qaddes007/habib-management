@@ -12,6 +12,12 @@ export function isApiOnline() {
   return apiOnline;
 }
 
+function getLegacyCachedResponse(requestUrl) {
+  if (API_BASE === '/api') return null;
+  const key = API_CACHE_PREFIX + encodeURIComponent('/api' + requestUrl);
+  return getCachedResponse(key);
+}
+
 export function setApiOnline(online) {
   apiOnline = online;
 }
@@ -77,7 +83,7 @@ function nextLocalId() {
 
 function enqueueOfflineWrite(url, method, body, kind, mutationId = crypto.randomUUID()) {
   if (!kind) {
-    throw new Error('Offline mein purani entries edit/delete nahi ho sakti. Internet reconnect karke dobara try karein.');
+    throw new Error('Existing records cannot be edited or deleted while offline. Reconnect to the internet and try again.');
   }
   const localId = ['bill', 'expense', 'stock'].includes(kind) ? nextLocalId() : null;
   const operation = {
@@ -607,7 +613,7 @@ async function request(url, opts = {}) {
   }
   const requestUrl = method === 'GET' ? resolveLocalBillUrl(url) : url;
   const cacheKey = API_CACHE_PREFIX + encodeURIComponent(API_BASE + requestUrl);
-  const cachedResponse = () => getCachedResponse(cacheKey);
+  const cachedResponse = () => getCachedResponse(cacheKey) ?? getLegacyCachedResponse(requestUrl);
 
   if (method !== 'GET' && (!apiOnline || navigator.onLine === false)) {
     return enqueueOfflineWrite(url, method, parsedBody, writeKind, mutationId);
@@ -639,7 +645,7 @@ async function request(url, opts = {}) {
     }
     if (method !== 'GET') return enqueueOfflineWrite(url, method, parsedBody, writeKind, mutationId);
     if (e.name === 'TimeoutError' || e.name === 'AbortError') {
-      throw new Error('Server se connection nahi ho raha. Is laptop par pehle load hua data hi offline dikhega; connection wapas aane par dobara try karein.');
+      throw new Error('Could not connect to the server. Previously loaded data from this computer is available offline; try again when the connection is restored.');
     }
     throw new Error(API_BASE === '/api'
       ? 'API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)'
@@ -859,7 +865,7 @@ export async function shareAsImage(title, lines, filename = 'habib-share.png') {
 
   const short =
     (title || 'S. HABIB') +
-    '\n📷 Image downloaded — WhatsApp Business mein attach karein (Gallery / Document).'
+    '\n📷 Image downloaded — attach it in WhatsApp Business (Gallery / Document).'
   shareWhatsApp(short)
 }
 

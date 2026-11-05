@@ -14,6 +14,12 @@ require dirname(__DIR__) . '/config/database.php';
 
 try {
     $db = getDB();
+    $db->exec("CREATE TABLE IF NOT EXISTS data_migration_batches (
+        source_id VARCHAR(64) NOT NULL,
+        batch_key VARCHAR(128) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (source_id, batch_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     // Get the latest modification timestamp from all key tables
     // NOTE: column names must match the actual schema in database.sql
@@ -27,6 +33,8 @@ try {
         SELECT MAX(created_at) AS ts FROM personal_expenses
         UNION ALL
         SELECT MAX(paid_at)    AS ts FROM payment_history
+        UNION ALL
+        SELECT MAX(created_at) AS ts FROM data_migration_batches
     ) combined";
 
     $row = $db->query($sql)->fetch(PDO::FETCH_ASSOC);

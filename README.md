@@ -81,7 +81,7 @@ By default, each desktop app uses its own local XAMPP MySQL database. To share t
 
 ### Optional private Tailscale connection
 
-This setup shares the partner's existing database; it does not merge another computer's local database. Make a separate backup of both databases first. Decide which database is the master before connecting any client, and do not import the client's database over the partner's database.
+This setup shares the partner's existing database. When a client first connects, the app automatically merges its existing local bills, payments, expenses, and stock into the shared database. Existing shared records are preserved; conflicting bill numbers are reassigned, and matching stock quantities are added. The import is recorded so it is not repeated on later launches. Back up both databases before connecting a client.
 
 1. Install Tailscale on the partner's host laptop and each trusted client computer. Sign each device into the same private tailnet. Do not enable Tailscale Funnel, public port forwarding, or direct public MySQL access.
 2. On the host laptop, start XAMPP MySQL and the desktop app. Keep this laptop awake and online while others use the shared database.
@@ -96,7 +96,7 @@ This setup shares the partner's existing database; it does not merge another com
    }
    ```
 
-6. Restart the client app. XAMPP's PHP is still needed locally to show the interface, but remote mode does not start the client's local MySQL. Bills, payments, stock, and reports go to the partner's shared server. A client computer's existing local database is left untouched and is not automatically merged.
+6. Restart the client app. XAMPP's PHP is still needed locally to show the interface. On first connection, the app merges the client's old local records into the shared database without replacing existing shared records. Bills, payments, stock, and reports then use the shared server.
 7. To stop sharing, close the host app or run `tailscale serve --https=443 off` on the host. Remove `remote-server.json` from a client to return that app to its own local database.
 
 When the shared server is temporarily unreachable, previously loaded data remains available on that laptop. New bills and payments, expenses, stock additions, and stock adjustments can be saved to that laptop's pending queue and sync when the host returns. Pending changes are not visible to other computers until synced. Editing or deleting existing records still requires a connection; do not uninstall or clear app data while changes are pending.

@@ -125,8 +125,8 @@ export default function App() {
       {pendingChanges.length > 0 && (
         <div className="offline-notice" role="status">
           {pendingChanges.some(change => change.failed)
-            ? `${pendingChanges.length} change(s) upload nahi huay. Data is laptop par saved hai; error solve karke retry karein.`
-            : `${pendingChanges.length} change(s) is laptop par saved hain; connection milte hi shared server par sync hongay.`}
+            ? `${pendingChanges.length} change(s) could not be uploaded. Data is saved on this computer; resolve the error and retry.`
+            : `${pendingChanges.length} change(s) saved on this computer; they will sync to the shared server when the connection is restored.`}
           {online && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => retryPendingChanges()}>
               Retry sync
@@ -136,7 +136,7 @@ export default function App() {
       )}
       {!online && (
         <div className="offline-notice" role="status">
-          Offline — pehle load hua data dikh raha hai. Naye bills aur supported changes is laptop par محفوظ rahenge.
+          Offline — previously loaded data is shown. New bills and supported changes will be saved on this computer.
         </div>
       )}
 

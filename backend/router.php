@@ -5,7 +5,7 @@
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 // 1. API Routes
-if (preg_match('#^/api/(bills|stock|expenses|reports|sync)\.php#', $uri, $m)) {
+if (preg_match('#^/api/(bills|stock|expenses|reports|sync|migration)\.php#', $uri, $m)) {
     require __DIR__ . '/api/' . $m[1] . '.php';
     return true;
 }

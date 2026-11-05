@@ -68,13 +68,13 @@ export default function Dashboard({ toast }) {
           <div className="card" style={{ marginBottom: 0 }}>
             <strong>Dashboard offline.</strong>{' '}
             {snapshot?.savedAt
-              ? `Pichla saved data ${new Date(snapshot.savedAt).toLocaleString('en-PK')} tak ka hai.`
+              ? `The last saved data is from ${new Date(snapshot.savedAt).toLocaleString('en-PK')}.`
               : snapshot?.data
-                ? 'Is laptop par saved dashboard data dikh raha hai.'
-                : 'Abhi tak is laptop par dashboard ka saved data nahi hai.'}
-            {' '}Internet/Tailscale wapas aaye to data khud refresh ho jayega.
+                ? 'Showing dashboard data saved on this computer.'
+                : 'There is no saved dashboard data on this computer yet.'}
+            {' '}Data will refresh automatically when the internet or Tailscale connection is restored.
             <button className="btn btn-blue btn-sm" style={{ marginLeft: 12 }} onClick={load} disabled={loading}>
-              {loading ? 'Loading…' : 'Dobara koshish karein'}
+              {loading ? 'Loading…' : 'Try Again'}
             </button>
           </div>
         </div>

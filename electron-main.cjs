@@ -29,6 +29,7 @@ let remoteServerConfig = null;
 const PORT = 8080;
 const DEFAULT_SERVER_URL = `http://127.0.0.1:${PORT}`;
 const REMOTE_SERVER_CONFIG_PATH = path.join(app.getPath('userData'), 'remote-server.json');
+const DATA_MIGRATION_ID_PATH = path.join(app.getPath('userData'), 'legacy-data-migration-id');
 const XAMPP_ROOT = process.env.XAMPP_HOME || 'C:\\xampp';
 const PHP_EXE = path.join(XAMPP_ROOT, 'php', 'php.exe');
 const MYSQLD_EXE = path.join(XAMPP_ROOT, 'mysql', 'bin', 'mysqld.exe');
@@ -253,6 +254,120 @@ function requestHealth(baseUrl, token) {
     });
 }
 
+function fetchJson(url, token, options = {}) {
+    return fetch(url, {
+        ...options,
+        headers: {
+            'X-App-Token': token,
+            ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+            ...options.headers
+        },
+        signal: AbortSignal.timeout(15000)
+    }).then(async response => {
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new Error(`The database migration endpoint returned invalid JSON (HTTP ${response.status}).`);
+        }
+        if (!response.ok || data.error || data.success === false) {
+            throw new Error(data.error || `The database migration request failed (HTTP ${response.status}).`);
+        }
+        return data;
+    });
+}
+
+function getDataMigrationId() {
+    try {
+        const id = fs.readFileSync(DATA_MIGRATION_ID_PATH, 'utf8').trim();
+        if (/^[A-Za-z0-9_-]{16,64}$/.test(id)) return id;
+        throw new Error('The saved data migration ID is invalid.');
+    } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+    }
+
+    const id = crypto.randomUUID().replace(/-/g, '');
+    fs.writeFileSync(DATA_MIGRATION_ID_PATH, id, { flag: 'wx', mode: 0o600 });
+    return id;
+}
+
+async function mergeLegacyLocalData() {
+    if (!remoteServerConfig) return;
+
+    const markerPath = path.join(
+        app.getPath('userData'),
+        `legacy-data-migrated-${crypto.createHash('sha256').update(remoteServerConfig.url).digest('hex').slice(0, 16)}`
+    );
+    if (fs.existsSync(markerPath)) return;
+
+    let remoteHealth;
+    try {
+        remoteHealth = await fetchJson(`${remoteServerConfig.url}/api/health`, remoteServerConfig.token);
+    } catch (err) {
+        console.warn('[DataMigration] Shared server is unavailable; legacy data merge will retry next launch:', err.message);
+        return;
+    }
+    if (remoteHealth.ok !== true || remoteHealth.authenticated !== true) return;
+
+    try {
+        await ensureMySQL();
+    } catch (err) {
+        console.warn('[DataMigration] Local MySQL is unavailable; legacy data has not been merged:', err.message);
+        return;
+    }
+
+    const sourceId = getDataMigrationId();
+    const kinds = ['bill', 'expense', 'personal_expense', 'stock'];
+    for (const kind of kinds) {
+        let cursor = 0;
+        while (true) {
+            const query = new URLSearchParams({ action: 'export', kind, cursor: String(cursor) });
+            let page;
+            try {
+                page = await fetchJson(
+                    `${DEFAULT_SERVER_URL}/api/migration.php?${query}`,
+                    appApiToken
+                );
+            } catch (err) {
+                if (err.message.includes('Database not found')) {
+                    console.log('[DataMigration] No existing local database was found; skipping legacy import.');
+                    return;
+                }
+                throw err;
+            }
+
+            const result = await fetchJson(
+                `${remoteServerConfig.url}/api/migration.php?action=import`,
+                remoteServerConfig.token,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        source_id: sourceId,
+                        kind,
+                        cursor,
+                        records: page.records
+                    })
+                }
+            );
+            if (result.success !== true) throw new Error(`Could not import legacy ${kind} data.`);
+            cursor = Number(page.next_cursor) || cursor;
+            if (!page.has_more) break;
+        }
+    }
+
+    await fetchJson(
+        `${remoteServerConfig.url}/api/migration.php?action=import`,
+        remoteServerConfig.token,
+        {
+            method: 'POST',
+            body: JSON.stringify({ source_id: sourceId, kind: 'complete', cursor: 0, records: [] })
+        }
+    );
+    fs.writeFileSync(markerPath, new Date().toISOString(), { flag: 'wx', mode: 0o600 });
+    console.log('[DataMigration] Legacy local data was merged into the shared database.');
+}
+
 function startPHP() {
     return (async () => {
         appApiToken = loadApiToken();
@@ -400,10 +515,10 @@ function initAutoUpdater() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             dialog.showMessageBox(mainWindow, {
                 type: 'info',
-                title: 'Naya Update Tayyar Hai',
-                message: `S. HABIB STEEL & LASER CRAFT ka naya version (v${info.version}) download ho chuka hai.`,
-                detail: 'Kya aap abhi software restart karna chahte hain? Agar aap "Baad Mein" chunenge to jab bhi aap software band karenge, naya version khud ba khud install ho jayega.',
-                buttons: ['Abhi Restart Karen', 'Baad Mein'],
+                title: 'New Update Ready',
+                message: `S. HABIB STEEL & LASER CRAFT version ${info.version} has been downloaded.`,
+                detail: 'Would you like to restart the software now? If you choose "Later", the update will install automatically the next time you close the software.',
+                buttons: ['Restart Now', 'Later'],
                 defaultId: 0,
                 cancelId: 1,
                 noLink: true
@@ -463,6 +578,21 @@ app.whenReady().then(async () => {
         remoteServerConfig = loadRemoteServerConfig();
         if (!remoteServerConfig) await ensureMySQL();
         await startPHP();
+        if (remoteServerConfig) {
+            try {
+                await mergeLegacyLocalData();
+            } catch (err) {
+                console.error('[DataMigration] Legacy data could not be merged:', err);
+                dialog.showMessageBox({
+                    type: 'warning',
+                    title: 'Legacy Data Import Incomplete',
+                    message: 'Data from this computer’s previous local database has not been fully merged.',
+                    detail: `Existing shared records were not replaced. The import will retry the next time the software starts.\n\n${err.message}`,
+                    buttons: ['OK'],
+                    noLink: true
+                }).catch(() => {});
+            }
+        }
         createWindow();
         initAutoUpdater();
 
