@@ -77,10 +77,8 @@ export default function BillView({ toast }) {
         <span>Bill #{bill.sr_no} — {bill.client_name}</span>
         <div className="btn-group">
           <button className="btn btn-blue" onClick={() => window.print()}>🖨️ Print</button>
-          {!bill.pending && !bill.pending_changes && !isBillLocked(bill) ? (
+          {!isBillLocked(bill) ? (
             <button className="btn btn-orange" onClick={() => navigate('/edit-bill/' + bill.id)}>✏️ Edit</button>
-          ) : bill.pending || bill.pending_changes ? (
-            <span className="badge badge-unpaid">Pending sync</span>
           ) : (
             <span className="badge badge-unpaid" title="PAID bills older than 30 days cannot be edited">🔒 Locked</span>
           )}
@@ -100,7 +98,7 @@ export default function BillView({ toast }) {
         <div className="offline-notice" role="status">
           {bill.pending
             ? 'This bill is saved only on this laptop. Its final bill number will be assigned after syncing.'
-            : 'A payment for this bill is saved on this laptop and is waiting to sync.'}
+            : 'Changes to this bill are saved on this laptop and are waiting to sync.'}
         </div>
       )}
 

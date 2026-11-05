@@ -98,6 +98,18 @@ function ensureOfflineMutationColumn(PDO $db, string $table): void {
     $ready[$table] = true;
 }
 
+function bumpDataChangeToken(PDO $db): void {
+    $db->exec('UPDATE data_change_counter SET version = version + 1 WHERE id = 1');
+}
+
+function ensureDataChangeCounterTable(PDO $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS data_change_counter (
+        id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+        version BIGINT UNSIGNED NOT NULL DEFAULT 0
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $db->exec('INSERT IGNORE INTO data_change_counter (id, version) VALUES (1, 0)');
+}
+
 function getOfflineMutationId(): ?string {
     $id = $_SERVER['HTTP_X_OFFLINE_MUTATION_ID'] ?? '';
     if ($id === '') return null;

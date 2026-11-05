@@ -48,13 +48,35 @@ try {
             if ($action === 'update') {
                 $id = (int)($input['id'] ?? 0);
                 if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
-                if ($type === 'personal') {
-                    $db->prepare('UPDATE personal_expenses SET description=?, amount=?, expense_date=? WHERE id=?')
-                       ->execute([$desc, $amount, $date, $id]);
-                } else {
-                    $db->prepare('UPDATE expenses SET description=?, amount=?, category=?, expense_date=? WHERE id=?')
-                       ->execute([$desc, $amount, $cat, $date, $id]);
+                $mutationId = getOfflineMutationId();
+                if ($mutationId !== null) {
+                    ensureOfflineMutationColumn($db, $table);
+                    $existing = $db->prepare("SELECT id FROM `$table` WHERE offline_mutation_id=?");
+                    $existing->execute([$mutationId]);
+                    $saved = $existing->fetch();
+                    if ($saved) jsonResponse(['success' => true, 'id' => (int)$saved['id']]);
                 }
+                $record = $db->prepare("SELECT id FROM `$table` WHERE id=?");
+                $record->execute([$id]);
+                if (!$record->fetch()) jsonResponse(['error' => 'Expense not found'], 404);
+                if ($type === 'personal') {
+                    $sql = 'UPDATE personal_expenses SET description=?, amount=?, expense_date=?';
+                    $params = [$desc, $amount, $date];
+                } else {
+                    $sql = 'UPDATE expenses SET description=?, amount=?, category=?, expense_date=?';
+                    $params = [$desc, $amount, $cat, $date];
+                }
+                if ($mutationId !== null) {
+                    $sql .= ', offline_mutation_id=?';
+                    $params[] = $mutationId;
+                }
+                $sql .= ' WHERE id=?';
+                $params[] = $id;
+                ensureDataChangeCounterTable($db);
+                $db->beginTransaction();
+                $db->prepare($sql)->execute($params);
+                bumpDataChangeToken($db);
+                $db->commit();
                 jsonResponse(['success' => true, 'id' => $id]);
             }
 
@@ -67,6 +89,8 @@ try {
                 if ($saved) jsonResponse(['success' => true, 'id' => (int)$saved['id']]);
             }
 
+            ensureDataChangeCounterTable($db);
+            $db->beginTransaction();
             if ($type === 'personal') {
                 $db->prepare('INSERT INTO personal_expenses (description, amount, expense_date, offline_mutation_id) VALUES (?,?,?,?)')
                    ->execute([$desc, $amount, $date, $mutationId]);
@@ -74,17 +98,26 @@ try {
                 $db->prepare('INSERT INTO expenses (description, amount, category, expense_date, offline_mutation_id) VALUES (?,?,?,?,?)')
                    ->execute([$desc, $amount, $cat, $date, $mutationId]);
             }
-            jsonResponse(['success' => true, 'id' => (int)$db->lastInsertId()]);
+            bumpDataChangeToken($db);
+            $newId = (int)$db->lastInsertId();
+            $db->commit();
+            jsonResponse(['success' => true, 'id' => $newId]);
 
         case 'DELETE':
             $id = (int)($_GET['id'] ?? 0);
             if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
-            $db->prepare("DELETE FROM $table WHERE id=?")->execute([$id]);
+            ensureDataChangeCounterTable($db);
+            $db->beginTransaction();
+            $delete = $db->prepare("DELETE FROM $table WHERE id=?");
+            $delete->execute([$id]);
+            if ($delete->rowCount() > 0) bumpDataChangeToken($db);
+            $db->commit();
             jsonResponse(['success' => true]);
 
         default:
             jsonResponse(['error' => 'Method not allowed'], 405);
     }
 } catch (Exception $e) {
+    if ($db->inTransaction()) $db->rollBack();
     jsonResponse(['error' => $e->getMessage()], 500);
 }

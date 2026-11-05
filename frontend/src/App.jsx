@@ -136,7 +136,7 @@ export default function App() {
       )}
       {!online && (
         <div className="offline-notice" role="status">
-          Offline — previously loaded data is shown. New bills and supported changes will be saved on this computer.
+          Offline — cached records are shown. Bills, expenses, stock changes, edits, and deletions are saved on this computer and sync when the shared server returns.
         </div>
       )}
 

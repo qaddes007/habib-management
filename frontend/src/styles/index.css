@@ -893,12 +893,13 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media print {
-  @page { margin: 12mm; }
+  @page { size: A4 landscape; margin: 8mm; }
 
   html, body {
     background: #fff !important;
     background-image: none !important;
     color: #000 !important;
+    margin: 0 !important;
   }
 
   #printArea {
@@ -911,13 +912,19 @@ input:focus, select:focus, textarea:focus {
     transform: none !important;
     font-family: Arial, Helvetica, sans-serif !important;
     font-size: 12pt !important;
+    font-weight: 700 !important;
     line-height: 1.4 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   #printArea * {
     background-color: transparent !important;
     background-image: none !important;
     color: #000 !important;
+    font-weight: 700 !important;
     box-shadow: none !important;
     text-shadow: none !important;
     animation: none !important;
@@ -930,12 +937,15 @@ input:focus, select:focus, textarea:focus {
 
   #printArea th,
   #printArea td {
-    border-color: #444 !important;
-    padding: 6px 5px !important;
+    border-color: #000 !important;
+    padding: 5px 3px !important;
+    overflow-wrap: anywhere !important;
   }
 
   #printArea table {
     font-size: 10pt !important;
+    width: 100% !important;
+    table-layout: fixed !important;
   }
 
   #printArea small {

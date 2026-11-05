@@ -142,6 +142,7 @@ try {
 
         migrationBatchTable($db);
         $batchKey = $kind . ':' . $cursor;
+        ensureDataChangeCounterTable($db);
         $db->beginTransaction();
         $existing = $db->prepare('SELECT 1 FROM data_migration_batches WHERE source_id=? AND batch_key=?');
         $existing->execute([$sourceId, $batchKey]);
@@ -166,6 +167,7 @@ try {
             }
             $db->prepare('INSERT INTO data_migration_batches (source_id, batch_key) VALUES (?, ?)')
                 ->execute([$sourceId, $batchKey]);
+            if ($records) bumpDataChangeToken($db);
         }
         $db->commit();
         jsonResponse(['success' => true]);

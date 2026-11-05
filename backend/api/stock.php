@@ -60,6 +60,7 @@ try {
 
                 if (!$mat || !$gauge) jsonResponse(['error' => 'Material and gauge required'], 400);
 
+                ensureDataChangeCounterTable($db);
                 $db->beginTransaction();
                 if ($id > 0) {
                     // Explicit row edit — set absolute quantity
@@ -90,6 +91,7 @@ try {
                            ->execute([$id, null, $qty, 'Stock add (new)', $mutationId]);
                     }
                 }
+                bumpDataChangeToken($db);
                 $db->commit();
                 jsonResponse(['success' => true, 'id' => $id]);
             }
@@ -112,6 +114,7 @@ try {
                     }
                 }
 
+                ensureDataChangeCounterTable($db);
                 $db->beginTransaction();
                 $stmt = $db->prepare('SELECT * FROM sheet_stock WHERE id=? FOR UPDATE');
                 $stmt->execute([$id]);
@@ -122,6 +125,7 @@ try {
                 $db->prepare('UPDATE sheet_stock SET quantity=? WHERE id=?')->execute([$newQty, $id]);
                 $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason, offline_mutation_id) VALUES (?,?,?,?,?)')
                    ->execute([$id, null, $delta, $reason, $mutationId]);
+                bumpDataChangeToken($db);
                 $db->commit();
                 jsonResponse(['success' => true, 'quantity' => $newQty]);
             }
@@ -131,7 +135,12 @@ try {
         case 'DELETE':
             $id = (int)($_GET['id'] ?? 0);
             if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
-            $db->prepare('DELETE FROM sheet_stock WHERE id=?')->execute([$id]);
+            ensureDataChangeCounterTable($db);
+            $db->beginTransaction();
+            $delete = $db->prepare('DELETE FROM sheet_stock WHERE id=?');
+            $delete->execute([$id]);
+            if ($delete->rowCount() > 0) bumpDataChangeToken($db);
+            $db->commit();
             jsonResponse(['success' => true]);
 
         default:

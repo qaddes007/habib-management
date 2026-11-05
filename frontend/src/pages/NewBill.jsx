@@ -666,9 +666,7 @@ export default function NewBill({ toast }) {
         const b = d.data
         if (!b) { toast('Bill not found', true); navigate('/bills'); return }
         if (b.pending) {
-          toast('Offline pending bill cannot be edited yet. It will receive its final bill number after sync.', true)
-          navigate('/bills')
-          return
+          toast('This local bill can be edited. Its final bill number is assigned after sync.')
         }
         if (isLocked(b)) {
           setLocked(true)
@@ -752,7 +750,9 @@ export default function NewBill({ toast }) {
       if (isEdit && billId) {
         payload.id = billId
         const res = await api.updateBill(payload)
-        toast('Bill #' + srNo + ' updated!')
+        toast(res.pending
+          ? 'Bill update saved on this laptop; it will sync later.'
+          : 'Bill #' + srNo + ' updated!')
         setTimeout(() => navigate('/bills/' + billId), 600)
       } else {
         const res = await api.createBill(payload)

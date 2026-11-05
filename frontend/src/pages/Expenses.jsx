@@ -53,11 +53,11 @@ function ExpensePanel({ type, title, toast }) {
         category: cat,
       }
       if (editId) {
-        await api.updateExpense(type, { ...body, id: editId })
-        toast('Expense updated')
+        const result = await api.updateExpense(type, { ...body, id: editId })
+        toast(result.pending ? 'Expense update saved on this laptop; it will sync later.' : 'Expense updated')
       } else {
-        await api.addExpense(type, body)
-        toast('Expense added')
+        const result = await api.addExpense(type, body)
+        toast(result.pending ? 'Expense saved on this laptop; it will sync later.' : 'Expense added')
       }
       resetForm()
       load()
@@ -69,8 +69,8 @@ function ExpensePanel({ type, title, toast }) {
   const del = async (id) => {
     if (!confirm('Delete this expense?')) return
     try {
-      await api.deleteExpense(type, id)
-      toast('Deleted')
+      const result = await api.deleteExpense(type, id)
+      toast(result.pending ? 'Expense deletion saved on this laptop; it will sync later.' : 'Deleted')
       if (editId === id) resetForm()
       load()
     } catch (e) {
@@ -137,8 +137,8 @@ function ExpensePanel({ type, title, toast }) {
                 {type === 'business' && <td>{e.category || '—'}</td>}
                 <td>{fmt(e.amount)}</td>
                 <td className="btn-group">
-                  <button className="btn btn-blue btn-sm" onClick={() => startEdit(e)} disabled={e.pending}>Edit</button>
-                  <button className="btn btn-red btn-sm" onClick={() => del(e.id)} disabled={e.pending}>Del</button>
+                  <button className="btn btn-blue btn-sm" onClick={() => startEdit(e)}>Edit</button>
+                  <button className="btn btn-red btn-sm" onClick={() => del(e.id)}>Del</button>
                 </td>
               </tr>
             ))}

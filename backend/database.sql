@@ -164,6 +164,13 @@ CREATE TABLE IF NOT EXISTS stock_log (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Monotonic token used by clients to detect any shared-data change, including deletions.
+CREATE TABLE IF NOT EXISTS data_change_counter (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    version BIGINT UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO data_change_counter (id, version) VALUES (1, 0);
+
 -- Sample stock data (same names as bills: MS-CNC, SS-CNC, SG-CNC, GP)
 INSERT INTO sheet_stock (material, gauge, sheet_size, quantity, kg_per_sheet) VALUES
 ('MS-CNC', '12 Gauge', '4x8', 50, 45.0),

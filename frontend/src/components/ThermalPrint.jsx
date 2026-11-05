@@ -33,13 +33,13 @@ export default function ThermalPrint({ bill, onClose }) {
 
     const style = printDocument.createElement('style')
     style.textContent = `
-      @page { size: 80mm auto; margin: 2mm 0; }
+      @page { size: 80mm auto; margin: 0; }
       * { box-sizing: border-box; }
-      html, body { width: 76mm; margin: 0; padding: 0; color: #000; background: #fff; }
+      html, body { width: 72mm; margin: 0; padding: 0; color: #000; background: #fff; }
       body {
         margin: 0 auto;
-        font: 13px/1.35 Arial, Helvetica, sans-serif;
-        font-weight: 500;
+        font: 12px/1.35 Arial, Helvetica, sans-serif;
+        font-weight: 700;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -47,7 +47,7 @@ export default function ThermalPrint({ bill, onClose }) {
         width: 100% !important;
         max-width: none !important;
         margin: 0 !important;
-        padding: 2mm !important;
+        padding: 1.5mm !important;
         overflow: visible !important;
         border-radius: 0 !important;
         color: #000 !important;
@@ -58,13 +58,16 @@ export default function ThermalPrint({ bill, onClose }) {
         font-size: 12px;
         line-height: 1.35;
         color: #000 !important;
+        font-weight: 700 !important;
         text-rendering: optimizeLegibility;
       }
+      #thermal-text * { color: #000 !important; font-weight: 700 !important; }
       #thermal-text table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       #thermal-text th, #thermal-text td {
         padding: 3px 1px !important;
         vertical-align: top;
         overflow-wrap: anywhere;
+        word-break: normal;
       }
       #thermal-text th {
         border-bottom: 1px solid #000 !important;
@@ -72,7 +75,7 @@ export default function ThermalPrint({ bill, onClose }) {
         font-weight: 700 !important;
       }
       #thermal-text td {
-        border-bottom: 1px solid #555 !important;
+        border-bottom: 1px solid #000 !important;
         font-size: 11px !important;
       }
       #thermal-text [style*="font-size: 7px"] { font-size: 9px !important; }
@@ -86,7 +89,7 @@ export default function ThermalPrint({ bill, onClose }) {
       #thermal-text img[alt="location"] {
         max-height: 30mm;
         object-fit: contain;
-        filter: grayscale(1) contrast(1.35) !important;
+        filter: grayscale(1) contrast(1.7) brightness(.9) !important;
       }
       #thermal-text tr { break-inside: avoid; page-break-inside: avoid; }
     `

@@ -34,8 +34,8 @@ export default function Bills({ toast }) {
   const del = async (id, sr) => {
     if (!confirm(`Delete Bill #${sr}? This cannot be undone.`)) return
     try {
-      await api.deleteBill(id)
-      toast('Bill deleted')
+      const result = await api.deleteBill(id)
+      toast(result.pending ? 'Bill deletion saved on this laptop; it will sync later.' : 'Bill deleted')
       load()
     } catch (e) {
       toast(e.message, true)
@@ -126,12 +126,12 @@ export default function Bills({ toast }) {
                   <td>{b.created_at?.slice(0, 16)}</td>
                   <td className="btn-group">
                     <Link to={`/bills/${b.id}`} className="btn btn-blue btn-sm">View</Link>
-                    {!b.pending && !b.pending_changes && <Link to={`/edit-bill/${b.id}`} className="btn btn-orange btn-sm">Edit</Link>}
+                    <Link to={`/edit-bill/${b.id}`} className="btn btn-orange btn-sm">Edit</Link>
                     <button className="btn btn-purple btn-sm"
                       onClick={() => openThermal(b.id)}>80mm</button>
                     <button className="btn btn-wa btn-sm"
                       onClick={() => shareBillWA(b.id)} title="Share on WhatsApp">WA Biz</button>
-                    <button className="btn btn-red btn-sm" onClick={() => del(b.id, b.sr_no)} disabled={b.pending || b.pending_changes}>Del</button>
+                    <button className="btn btn-red btn-sm" onClick={() => del(b.id, b.sr_no)}>Del</button>
                   </td>
                 </tr>
               ))}

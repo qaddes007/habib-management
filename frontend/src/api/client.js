@@ -3,6 +3,7 @@ export const API_BASE = window.appSecurity?.apiBaseUrl || '/api';
 const API_CACHE_PREFIX = 'habib-api-cache:v1:';
 const OUTBOX_KEY = 'habib-offline-outbox:v1';
 const BILL_ID_MAP_KEY = 'habib-offline-bill-ids:v1';
+const RECORD_ID_MAP_KEY = 'habib-offline-record-ids:v1';
 const OUTBOX_EVENT = 'habib-outbox';
 const SYNC_EVENT = 'habib-sync';
 let apiOnline = true;
@@ -49,19 +50,79 @@ function readBillIdMap() {
   }
 }
 
+function readOfflineRecordIdMap() {
+  try {
+    return JSON.parse(localStorage.getItem(RECORD_ID_MAP_KEY) || '{"expense":{},"stock":{}}');
+  } catch (error) {
+    console.warn('Could not read offline record ID mappings:', error);
+    return { expense: {}, stock: {} };
+  }
+}
+
+function resolveOfflineRecordId(kind, id) {
+  const numericId = Number(id);
+  if (numericId >= 0) return numericId;
+  const type = kind.startsWith('expense') ? 'expense' : 'stock';
+  return Number(readOfflineRecordIdMap()[type]?.[numericId]) || numericId;
+}
+
+function resolveBillId(id) {
+  const numericId = Number(id);
+  return numericId < 0 ? Number(readBillIdMap()[numericId]) || numericId : numericId;
+}
+
+function sameBillId(firstId, secondId) {
+  return resolveBillId(firstId) === resolveBillId(secondId);
+}
+
+function sameRecordId(kind, firstId, secondId) {
+  if (kind.startsWith('bill')) return sameBillId(firstId, secondId);
+  const recordType = kind.startsWith('expense') ? 'expense' : 'stock';
+  return resolveOfflineRecordId(recordType, firstId) === resolveOfflineRecordId(recordType, secondId);
+}
+
+function getCachedExpense(id, type) {
+  const resolvedId = resolveOfflineRecordId('expense', id);
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(API_CACHE_PREFIX)) continue;
+    let cachedUrl;
+    try {
+      cachedUrl = decodeURIComponent(key.slice(API_CACHE_PREFIX.length));
+    } catch {
+      continue;
+    }
+    const cachedType = new URL(cachedUrl, window.location.href).searchParams.get('type') || 'business';
+    if (cachedType !== type) continue;
+    const rows = getCachedResponse(key)?.data;
+    if (!Array.isArray(rows)) continue;
+    const record = rows.find(row => Number(row.id) === resolvedId);
+    if (record) return record;
+  }
+  return null;
+}
+
 function apiUrl(url) {
   return new URL(API_BASE + url, window.location.href);
 }
 
 function queuedWriteKind(url, method, body) {
-  if (method !== 'POST') return null;
   const parsed = apiUrl(url);
   const action = parsed.searchParams.get('action') || '';
+  if (method === 'DELETE') {
+    if (parsed.pathname.endsWith('/bills.php')) return 'bill_delete';
+    if (parsed.pathname.endsWith('/expenses.php')) return 'expense_delete';
+    if (parsed.pathname.endsWith('/stock.php')) return 'stock_delete';
+    return null;
+  }
+  if (method !== 'POST') return null;
   if (parsed.pathname.endsWith('/bills.php') && action === 'create') return 'bill';
+  if (parsed.pathname.endsWith('/bills.php') && action === 'update') return 'bill_update';
   if (parsed.pathname.endsWith('/bills.php') && action === 'add_payment') return 'payment';
   if (parsed.pathname.endsWith('/expenses.php') && !action) return 'expense';
+  if (parsed.pathname.endsWith('/expenses.php') && action === 'update') return 'expense_update';
   if (parsed.pathname.endsWith('/stock.php') && ['add', 'update'].includes(action) && !body?.id) return 'stock';
-  if (parsed.pathname.endsWith('/stock.php') && action === 'adjust' && Number(body?.id) > 0) return 'stock_adjust';
+  if (parsed.pathname.endsWith('/stock.php') && action === 'adjust' && Number(body?.id) !== 0) return 'stock_adjust';
   return null;
 }
 
@@ -83,25 +144,113 @@ function nextLocalId() {
 
 function enqueueOfflineWrite(url, method, body, kind, mutationId = crypto.randomUUID()) {
   if (!kind) {
-    throw new Error('Existing records cannot be edited or deleted while offline. Reconnect to the internet and try again.');
+    throw new Error('This change cannot be saved offline.');
   }
+  const parsed = apiUrl(url);
+  const operationBody = method === 'DELETE'
+    ? { id: Number(parsed.searchParams.get('id')) }
+    : body;
+  const recordId = Number(operationBody.id);
+  const outbox = readOutbox();
+
+  if (kind === 'bill_delete') {
+    const withoutPayments = outbox.filter(item =>
+      !(item.kind === 'payment' && sameBillId(item.body.bill_id, recordId))
+    );
+    if (withoutPayments.length !== outbox.length) {
+      outbox.splice(0, outbox.length, ...withoutPayments);
+    }
+  }
+
+  if (kind === 'bill_update' && recordId < 0) {
+    const pendingBill = outbox.find(item => item.kind === 'bill' && item.localId === recordId);
+    if (pendingBill) {
+      const queuedPayments = outbox
+        .filter(item => item.kind === 'payment' && sameBillId(item.body.bill_id, recordId))
+        .reduce((sum, item) => sum + (Number(item.body.amount) || 0), 0);
+      pendingBill.body = {
+        ...operationBody,
+        paid_amount: Math.max(0, (Number(operationBody.paid_amount) || 0) - queuedPayments),
+      };
+      delete pendingBill.failed;
+      saveOutbox(outbox.filter(item => !(item.kind === 'bill_update' && Number(item.body.id) === recordId)));
+      return { success: true, bill_id: recordId, pending: true };
+    }
+  }
+  if (kind === 'expense_update' && recordId < 0) {
+    const pendingExpense = outbox.find(item => item.kind === 'expense' && item.localId === recordId);
+    if (pendingExpense) {
+      pendingExpense.body = { ...operationBody };
+      delete pendingExpense.body.id;
+      delete pendingExpense.failed;
+      saveOutbox(outbox.filter(item => !(item.kind === 'expense_update' && Number(item.body.id) === recordId)));
+      return { success: true, id: recordId, pending: true };
+    }
+  }
+
+  const createKind = kind === 'bill_delete' ? 'bill' : kind === 'expense_delete' ? 'expense' : 'stock';
+  const pendingCreate = ['bill_delete', 'expense_delete', 'stock_delete'].includes(kind)
+    ? outbox.find(item => item.kind === createKind && item.localId === recordId)
+    : null;
+  if (pendingCreate) {
+    const filtered = outbox.filter(item => {
+      if (item.kind === createKind && item.localId === recordId) return false;
+      if (kind === 'bill_delete' && item.kind === 'payment' && sameBillId(item.body.bill_id, recordId)) return false;
+      if (kind === 'stock_delete' && item.kind === 'stock_adjust' && sameRecordId(kind, item.body.id, recordId)) return false;
+      return !(
+        item.kind === kind.replace('_delete', '_update') &&
+        sameRecordId(kind, item.body.id, recordId)
+      );
+    });
+    saveOutbox(filtered);
+    return { success: true, pending: true };
+  }
+
+  const updateKinds = ['bill_update', 'expense_update'];
+  if (updateKinds.includes(kind)) {
+    const deleteKind = kind.replace('_update', '_delete');
+    const withoutQueuedDelete = outbox.filter(item =>
+      !(item.kind === deleteKind && sameRecordId(kind, item.body.id, recordId))
+    );
+    if (withoutQueuedDelete.length !== outbox.length) {
+      outbox.splice(0, outbox.length, ...withoutQueuedDelete);
+    }
+    const previous = [...outbox].reverse().find(item =>
+      item.kind === kind && sameRecordId(kind, item.body.id, recordId)
+    );
+    if (previous) {
+      const index = outbox.indexOf(previous);
+      outbox.splice(index, 1);
+    }
+  }
+  if (['bill_delete', 'expense_delete', 'stock_delete'].includes(kind)) {
+    const alreadyQueued = outbox.some(item =>
+      item.kind === kind && sameRecordId(kind, item.body.id, recordId)
+    );
+    if (alreadyQueued) return { success: true, pending: true };
+  }
+
   const localId = ['bill', 'expense', 'stock'].includes(kind) ? nextLocalId() : null;
   const operation = {
     id: mutationId,
     kind,
     method,
     url,
-    body,
+    body: operationBody,
     queuedAt: new Date().toISOString(),
     ...(localId !== null ? { localId } : {}),
   };
-  const outbox = readOutbox();
+  if (kind === 'bill_update' || kind === 'bill_delete') {
+    operation.before = getCachedBill(resolveBillId(recordId)) || null;
+  } else if (kind === 'expense_update' || kind === 'expense_delete') {
+    operation.before = getCachedExpense(recordId, parsed.searchParams.get('type') || 'business');
+  }
   outbox.push(operation);
   saveOutbox(outbox);
 
   if (kind === 'bill') return { success: true, bill_id: localId, sr_no: 'PENDING', pending: true };
   if (kind === 'expense' || kind === 'stock') return { success: true, id: localId, pending: true };
-  return { success: true, pending: true };
+  return { success: true, id: recordId, bill_id: recordId, pending: true };
 }
 
 function pendingError(response) {
@@ -126,16 +275,36 @@ export async function syncPendingChanges() {
       if (!operation || operation.failed) return;
 
       const body = { ...operation.body };
-      if (operation.kind === 'payment' && Number(body.bill_id) < 0) {
-        const serverBillId = readBillIdMap()[body.bill_id];
-        if (!serverBillId) return;
-        body.bill_id = Number(serverBillId);
+      const requestUrl = apiUrl(operation.url);
+      const billId = operation.kind === 'payment' ? Number(body.bill_id)
+        : operation.kind === 'bill_update' ? Number(body.id)
+          : operation.kind === 'bill_delete' ? Number(requestUrl.searchParams.get('id')) : 0;
+      const recordKind = operation.kind.startsWith('expense') ? 'expense'
+        : operation.kind.startsWith('stock') ? 'stock' : '';
+      if (recordKind) {
+        const recordId = operation.kind.endsWith('_delete')
+          ? Number(requestUrl.searchParams.get('id'))
+          : Number(body.id);
+        if (recordId < 0) {
+          const serverRecordId = resolveOfflineRecordId(recordKind, recordId);
+          if (serverRecordId < 0) return;
+          if (operation.kind.endsWith('_delete')) requestUrl.searchParams.set('id', String(serverRecordId));
+          else body.id = serverRecordId;
+        }
       }
+      if (billId < 0) {
+        const serverBillId = readBillIdMap()[billId];
+        if (!serverBillId) return;
+        if (operation.kind === 'payment') body.bill_id = Number(serverBillId);
+        else if (operation.kind === 'bill_update') body.id = Number(serverBillId);
+        else requestUrl.searchParams.set('id', String(serverBillId));
+      }
+      const endpoint = requestUrl.pathname.replace(/^\/api/, '') + requestUrl.search;
 
       let response;
       try {
         const appToken = window.appSecurity?.apiToken;
-        const result = await fetch(API_BASE + operation.url, {
+        const result = await fetch(API_BASE + endpoint, {
           method: operation.method,
           headers: {
             'Content-Type': 'application/json',
@@ -174,10 +343,27 @@ export async function syncPendingChanges() {
         return;
       }
 
+      const missingServerId =
+        (operation.kind === 'bill' && !(Number(response.data.bill_id) > 0)) ||
+        (['expense', 'stock'].includes(operation.kind) && !(Number(response.data.id) > 0));
+      if (missingServerId) {
+        operation.failed = 'Server accepted the change but did not return its permanent record ID.';
+        outbox[0] = operation;
+        saveOutbox(outbox);
+        return;
+      }
+
       if (operation.kind === 'bill' && operation.localId) {
         const idMap = readBillIdMap();
         idMap[operation.localId] = response.data.bill_id;
         localStorage.setItem(BILL_ID_MAP_KEY, JSON.stringify(idMap));
+      }
+      if (['expense', 'stock'].includes(operation.kind) && operation.localId) {
+        const idMap = readOfflineRecordIdMap();
+        const type = operation.kind === 'expense' ? 'expense' : 'stock';
+        idMap[type] = idMap[type] || {};
+        idMap[type][operation.localId] = response.data.id;
+        localStorage.setItem(RECORD_ID_MAP_KEY, JSON.stringify(idMap));
       }
       outbox.shift();
       saveOutbox(outbox);
@@ -198,7 +384,7 @@ export function retryPendingChanges() {
   if (apiOnline) return syncPendingChanges();
 }
 
-function calculatePendingBill(operation) {
+function calculatePendingBill(operation, existingBill = null) {
   const payload = operation.body;
   const frames = (payload.frames || []).map((frame, index) => {
     const pcs = Math.max(1, Number.parseInt(frame.pcs, 10) || 1);
@@ -217,20 +403,33 @@ function calculatePendingBill(operation) {
   const grand = frames.reduce((sum, frame) => sum + frame.total, 0);
   const discount = Math.max(0, Number(payload.discount) || 0);
   const net = Math.max(0, grand - discount);
-  const paid = Math.max(0, Number(payload.paid_amount) || 0);
-  const payments = readOutbox()
-    .filter(item => item.kind === 'payment' && Number(item.body.bill_id) === operation.localId)
-    .map(item => ({ amount: Number(item.body.amount) || 0, note: item.body.note || 'Payment', paid_at: item.queuedAt, pending: true }));
+  let paid = Math.max(0, Number(payload.paid_amount) || 0);
+  const billId = operation.localId ?? Number(payload.id);
+  const outbox = readOutbox();
+  const payments = operation.kind === 'bill'
+    ? outbox.filter(item => item.kind === 'payment' && sameBillId(item.body.bill_id, billId))
+      .map(item => ({ amount: Number(item.body.amount) || 0, note: item.body.note || 'Payment', paid_at: item.queuedAt, pending: true }))
+    : [];
+  if (operation.kind === 'bill_update') {
+    const operationIndex = outbox.findIndex(item => item.id === operation.id);
+    if (operationIndex >= 0) {
+      const previouslyIncludedPayments = outbox.slice(0, operationIndex)
+        .filter(item => item.kind === 'payment' && sameBillId(item.body.bill_id, billId))
+        .reduce((sum, item) => sum + (Number(item.body.amount) || 0), 0);
+      paid = Math.max(0, paid - previouslyIncludedPayments);
+    }
+  }
   const totalPaid = paid + payments.reduce((sum, payment) => sum + payment.amount, 0);
   const personalExpenses = payload.personal_expenses || [];
   const personalTotal = personalExpenses.reduce((sum, expense) => sum + (Number(expense.cost) || 0), 0);
 
   return {
-    id: operation.localId,
-    sr_no: 'PENDING',
+    ...existingBill,
+    id: existingBill?.id ?? billId,
+    sr_no: existingBill?.sr_no ?? 'PENDING',
     client_name: payload.client_name,
     client_phone: payload.client_phone || '',
-    created_at: operation.queuedAt.replace('T', ' ').slice(0, 19),
+    created_at: existingBill?.created_at ?? operation.queuedAt.replace('T', ' ').slice(0, 19),
     grand_total: grand,
     discount,
     net_total: net,
@@ -240,11 +439,12 @@ function calculatePendingBill(operation) {
     notes: payload.notes || '',
     frames,
     frame_count: frames.length,
-    payment_history: payments,
+    payment_history: [...(existingBill?.payment_history || []), ...payments],
     personal_total: personalTotal,
     personal_expenses: personalExpenses,
-    company: {},
-    pending: true,
+    company: existingBill?.company || {},
+    pending: operation.kind === 'bill' || !!existingBill?.pending,
+    pending_changes: operation.kind !== 'bill' || !!existingBill?.pending_changes,
   };
 }
 
@@ -266,9 +466,48 @@ function normalizePendingStockMaterial(material) {
 }
 
 function applyPendingStockChanges(rows, queue) {
+  const adjustForBill = (bill, direction) => {
+    if (!bill) return;
+    for (const frame of bill.frames || []) {
+      if (!['cnc_only', 'cnc_pipe', 'bending_sheet'].includes(frame.bill_category)) continue;
+      const material = normalizePendingStockMaterial(frame.cnc_material || frame.material);
+      if (!material) continue;
+
+      const width = Number(frame.width) || 0;
+      const length = Number(frame.length) || 0;
+      const pieces = Math.max(1, Number.parseInt(frame.pcs, 10) || 1);
+      const area = Number(frame.area) || width * length * pieces;
+      const sheetArea = { '4x8': 32, '5x8': 40, '4x10': 40, '5x10': 50 }[frame.sheet_size || '4x8'] || 32;
+      const sheetsNeeded = area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0;
+      if (sheetsNeeded <= 0) continue;
+
+      const gauge = frame.cnc_gauge || frame.gauge || '';
+      const gaugeNumber = String(gauge).replace(/[^0-9]/g, '');
+      const size = frame.sheet_size || '4x8';
+      const existing = rows.find(row =>
+        row.material === material &&
+        row.sheet_size === size &&
+        (row.gauge === gauge || (gaugeNumber && (
+          row.gauge === `${gaugeNumber} Gauge` ||
+          String(row.gauge).includes(gaugeNumber)
+        )))
+      );
+      if (existing) {
+        existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + direction * sheetsNeeded);
+        existing.pending_changes = true;
+      }
+    }
+  };
+
   for (const operation of queue) {
+    if (operation.kind === 'stock_delete') {
+      const index = rows.findIndex(row => Number(row.id) === resolveOfflineRecordId('stock', operation.body.id));
+      if (index >= 0) rows.splice(index, 1);
+      continue;
+    }
+
     if (operation.kind === 'stock_adjust') {
-      const existing = rows.find(row => Number(row.id) === Number(operation.body.id));
+      const existing = rows.find(row => Number(row.id) === resolveOfflineRecordId('stock', operation.body.id));
       if (existing) {
         existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + (Number(operation.body.delta) || 0));
         existing.pending_changes = true;
@@ -292,35 +531,18 @@ function applyPendingStockChanges(rows, queue) {
       continue;
     }
 
-    if (operation.kind !== 'bill') continue;
-    for (const frame of operation.body.frames || []) {
-      if (!['cnc_only', 'cnc_pipe', 'bending_sheet'].includes(frame.bill_category)) continue;
-      const material = normalizePendingStockMaterial(frame.cnc_material || frame.material);
-      if (!material) continue;
-
-      const width = Number(frame.width) || 0;
-      const length = Number(frame.length) || 0;
-      const pieces = Math.max(1, Number.parseInt(frame.pcs, 10) || 1);
-      const area = width * length * pieces;
-      const sheetArea = { '4x8': 32, '5x8': 40, '4x10': 40, '5x10': 50 }[frame.sheet_size || '4x8'] || 32;
-      const sheetsNeeded = area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0;
-      if (sheetsNeeded <= 0) continue;
-
-      const gauge = frame.cnc_gauge || frame.gauge || '';
-      const gaugeNumber = String(gauge).replace(/[^0-9]/g, '');
-      const size = frame.sheet_size || '4x8';
-      const existing = rows.find(row =>
-        row.material === material &&
-        row.sheet_size === size &&
-        (row.gauge === gauge || (gaugeNumber && (
-          row.gauge === `${gaugeNumber} Gauge` ||
-          String(row.gauge).includes(gaugeNumber)
-        )))
-      );
-      if (existing) {
-        existing.quantity = Math.max(0, (Number(existing.quantity) || 0) - sheetsNeeded);
-        existing.pending_changes = true;
-      }
+    if (operation.kind === 'bill') {
+      adjustForBill(calculatePendingBill(operation), -1);
+      continue;
+    }
+    if (operation.kind === 'bill_update') {
+      const before = operation.before || getCachedBill(resolveBillId(operation.body.id));
+      adjustForBill(before, 1);
+      adjustForBill(calculatePendingBill(operation, before), -1);
+      continue;
+    }
+    if (operation.kind === 'bill_delete') {
+      adjustForBill(operation.before || getCachedBill(resolveBillId(operation.body.id)), 1);
     }
   }
 }
@@ -339,39 +561,36 @@ function addQueuedChanges(url, response) {
   if (path.endsWith('/bills.php')) {
     const action = parsed.searchParams.get('action') || '';
     const id = Number(parsed.searchParams.get('id'));
+    const originalServerBillCount = Array.isArray(result.data) ? result.data.length : 0;
     if (action === 'get' && id < 0) {
       const localBill = pendingBills().find(bill => bill.id === id);
       if (localBill) return { success: true, data: localBill, pending: true };
     }
 
-    if (Array.isArray(result.data)) {
-      const payments = queue.filter(item => item.kind === 'payment');
-      result.data = result.data.map(bill => {
-        const billPayments = payments.filter(item => Number(item.body.bill_id) === Number(bill.id));
-        if (!billPayments.length) return bill;
-        const amount = billPayments.reduce((sum, item) => sum + (Number(item.body.amount) || 0), 0);
-        const paid = Number(bill.paid_amount || 0) + amount;
-        const remaining = Math.max(0, Number(bill.net_total || 0) - paid);
-        return { ...bill, paid_amount: paid, remaining_balance: remaining, payment_status: remaining === 0 ? 'PAID' : 'PARTIAL', pending_changes: true };
-      });
-    }
+    const applyBillChanges = bill => {
+      const deleted = queue.some(item => item.kind === 'bill_delete' &&
+        sameBillId(item.body.id, bill.id));
+      if (deleted) return null;
 
-    if (action === 'get' && result.data && !Array.isArray(result.data)) {
-      const billPayments = queue.filter(item =>
-        item.kind === 'payment' && Number(item.body.bill_id) === Number(result.data.id)
+      const update = [...queue].reverse().find(item =>
+        item.kind === 'bill_update' && sameBillId(item.body.id, bill.id)
       );
-      if (billPayments.length) {
-        const amount = billPayments.reduce((sum, item) => sum + (Number(item.body.amount) || 0), 0);
-        const paid = Number(result.data.paid_amount || 0) + amount;
-        const remaining = Math.max(0, Number(result.data.net_total || 0) - paid);
-        result.data = {
-          ...result.data,
+      let updated = update ? calculatePendingBill(update, bill) : bill;
+      const payments = queue.filter(item =>
+        item.kind === 'payment' && sameBillId(item.body.bill_id, updated.id)
+      );
+      if (payments.length) {
+        const amount = payments.reduce((sum, item) => sum + (Number(item.body.amount) || 0), 0);
+        const paid = Number(updated.paid_amount || 0) + amount;
+        const remaining = Math.max(0, Number(updated.net_total || 0) - paid);
+        updated = {
+          ...updated,
           paid_amount: paid,
           remaining_balance: remaining,
           payment_status: remaining === 0 ? 'PAID' : 'PARTIAL',
           payment_history: [
-            ...(result.data.payment_history || []),
-            ...billPayments.map(item => ({
+            ...(updated.payment_history || []),
+            ...payments.map(item => ({
               amount: Number(item.body.amount) || 0,
               note: item.body.note || 'Payment',
               paid_at: item.queuedAt,
@@ -381,18 +600,46 @@ function addQueuedChanges(url, response) {
           pending_changes: true,
         };
       }
+      return updated;
+    };
+
+    if (Array.isArray(result.data)) {
+      result.data = result.data.map(applyBillChanges).filter(Boolean);
+    } else if (action === 'get' && result.data) {
+      result.data = applyBillChanges(result.data);
     }
 
     if (action === 'list' && Array.isArray(result.data)) {
       const search = (parsed.searchParams.get('search') || '').toLowerCase();
       const status = parsed.searchParams.get('status') || '';
+      result.data = result.data.filter(bill =>
+        (!search || `${bill.client_name} ${bill.client_phone} ${bill.sr_no}`.toLowerCase().includes(search)) &&
+        (!status || bill.payment_status === status)
+      );
+      const visibleIds = new Set(result.data.map(bill => Number(bill.id)));
+      const updatedBills = queue.filter(item => item.kind === 'bill_update')
+        .filter(item => !queue.some(change => change.kind === 'bill_delete' &&
+          sameBillId(change.body.id, item.body.id)))
+        .filter(item => !visibleIds.has(resolveBillId(item.body.id)))
+        .map(item => {
+          const cachedBill = getCachedBill(resolveBillId(item.body.id));
+          return cachedBill ? calculatePendingBill(item, cachedBill) : null;
+        })
+        .filter(bill => bill &&
+          (!search || `${bill.client_name} ${bill.client_phone} ${bill.sr_no}`.toLowerCase().includes(search)) &&
+          (!status || bill.payment_status === status));
       const additions = pendingBills().filter(bill => {
         if (search && !`${bill.client_name} ${bill.client_phone} ${bill.sr_no}`.toLowerCase().includes(search)) return false;
         if (status && bill.payment_status !== status) return false;
         return true;
       });
-      result.data = [...additions, ...result.data];
-      result.total = (Number(result.total) || 0) + additions.length;
+      const visibleServerBillCount = result.data.length;
+      result.data = [...additions, ...updatedBills, ...result.data];
+      result.total = Math.max(
+        0,
+        (Number(result.total) || 0) - (originalServerBillCount - visibleServerBillCount) +
+          additions.length + updatedBills.length
+      );
     }
   }
 
@@ -400,21 +647,58 @@ function addQueuedChanges(url, response) {
     const type = parsed.searchParams.get('type') || 'business';
     const from = parsed.searchParams.get('from') || '';
     const to = parsed.searchParams.get('to') || '';
+    const isType = operation => {
+      const operationType = apiUrl(operation.url).searchParams.get('type') || 'business';
+      return operationType === type;
+    };
+    const updatedRows = result.data
+      .filter(row => !queue.some(item =>
+        item.kind === 'expense_delete' && isType(item) && sameRecordId('expense', item.body.id, row.id)
+      ))
+      .map(row => {
+        const update = [...queue].reverse().find(item =>
+          item.kind === 'expense_update' && isType(item) && sameRecordId('expense', item.body.id, row.id)
+        );
+        return update ? { ...row, ...update.body, pending_changes: true } : row;
+      })
+      .filter(row => row.expense_date >= from && row.expense_date <= to);
+    const listedIds = new Set(updatedRows.map(row => resolveOfflineRecordId('expense', row.id)));
+    const queuedUpdates = queue.filter(item =>
+      item.kind === 'expense_update' &&
+      isType(item) &&
+      !listedIds.has(resolveOfflineRecordId('expense', item.body.id)) &&
+      item.body.expense_date >= from &&
+      item.body.expense_date <= to &&
+      !queue.some(deletion => deletion.kind === 'expense_delete' && isType(deletion) && sameRecordId('expense', deletion.body.id, item.body.id))
+    ).map(item => ({
+      ...item.body,
+      id: resolveOfflineRecordId('expense', item.body.id),
+      category: item.body.category || 'General',
+      pending_changes: true,
+    }));
     const additions = queue.filter(item =>
       item.kind === 'expense' &&
-      (item.url.includes(`type=${type}`) || (!item.url.includes('type=') && type === 'business')) &&
+      isType(item) &&
       item.body.expense_date >= from &&
       item.body.expense_date <= to
-    ).map(item => ({
-      id: item.localId,
-      description: item.body.description,
-      amount: Number(item.body.amount) || 0,
-      expense_date: item.body.expense_date,
-      category: item.body.category || 'General',
-      pending: true,
-    }));
-    result.data = [...additions, ...result.data];
-    result.total = (Number(result.total) || 0) + additions.reduce((sum, item) => sum + item.amount, 0);
+    ).map(item => {
+      const update = [...queue].reverse().find(change =>
+        change.kind === 'expense_update' && isType(change) && sameRecordId('expense', change.body.id, item.localId)
+      );
+      return {
+        ...item.body,
+        ...update?.body,
+        id: item.localId,
+        category: (update?.body || item.body).category || 'General',
+        pending: true,
+      };
+    }).filter(row => row.expense_date >= from && row.expense_date <= to);
+    const pendingDeletes = new Set(queue
+      .filter(item => item.kind === 'expense_delete' && isType(item))
+      .map(item => resolveOfflineRecordId('expense', item.body.id)));
+    const visibleAdditions = additions.filter(row => !pendingDeletes.has(Number(row.id)));
+    result.data = [...visibleAdditions, ...queuedUpdates, ...updatedRows];
+    result.total = result.data.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
   }
 
   if (path.endsWith('/stock.php') && Array.isArray(result.data)) {
@@ -443,6 +727,127 @@ function addQueuedChanges(url, response) {
       return true;
     };
     const add = (key, amount) => { result.revenue[key] = (Number(result.revenue[key]) || 0) + amount; };
+    const changeBillReport = (bill, direction) => {
+      if (!bill || !inPeriod(bill.created_at)) return;
+      const sign = direction;
+      add('bill_count', sign);
+      add('gross_total', sign * (Number(bill.grand_total) || 0));
+      add('total_discount', sign * (Number(bill.discount) || 0));
+      add('net_total', sign * (Number(bill.net_total) || 0));
+      add('total_paid', sign * (Number(bill.paid_amount) || 0));
+      add('total_remaining', sign * (Number(bill.remaining_balance) || 0));
+      add('bill_personal', sign * (Number(bill.personal_total) || 0));
+      result.personal_expenses = (Number(result.personal_expenses) || 0) + sign * (Number(bill.personal_total) || 0);
+      result.profit = (Number(result.profit) || 0) + sign * ((Number(bill.paid_amount) || 0) - (Number(bill.personal_total) || 0));
+
+      result.by_client = result.by_client || [];
+      let client = result.by_client.find(row => row.client_name === bill.client_name);
+      if (!client && sign > 0) {
+        client = { client_name: bill.client_name, bills: 0, net_total: 0, paid: 0, remaining: 0, last_date: bill.created_at };
+        result.by_client.push(client);
+      }
+      if (client) {
+        client.bills = (Number(client.bills) || 0) + sign;
+        client.net_total = (Number(client.net_total) || 0) + sign * (Number(bill.net_total) || 0);
+        client.paid = (Number(client.paid) || 0) + sign * (Number(bill.paid_amount) || 0);
+        client.remaining = (Number(client.remaining) || 0) + sign * (Number(bill.remaining_balance) || 0);
+        if (sign > 0 && String(bill.created_at) > String(client.last_date || '')) client.last_date = bill.created_at;
+        if (client.bills <= 0) result.by_client = result.by_client.filter(row => row !== client);
+      }
+
+      result.by_category = result.by_category || [];
+      result.material_usage = result.material_usage || [];
+      result.usage_detail = result.usage_detail || [];
+      if (sign < 0) {
+        result.usage_detail = result.usage_detail.filter(row => String(row.sr_no) !== String(bill.sr_no));
+      }
+      for (const frame of bill.frames || []) {
+        const categoryKey = frame.bill_category || 'cnc_only';
+        let category = result.by_category.find(row => row.bill_category === categoryKey);
+        if (!category && sign > 0) {
+          category = { bill_category: categoryKey, items: 0, amount: 0 };
+          result.by_category.push(category);
+        }
+        if (category) {
+          category.items = (Number(category.items) || 0) + sign * (Number(frame.pcs) || 1);
+          category.amount = (Number(category.amount) || 0) + sign * (Number(frame.total) || 0);
+          if (category.items <= 0) result.by_category = result.by_category.filter(row => row !== category);
+        }
+
+        const rawMaterial = String(frame.cnc_material || frame.material || '').trim() || '(no material)';
+        const reportMaterial = ['MS-CNC', 'SS-CNC', 'SG-CNC', 'GP', 'MS-BLACK', 'SS-SILVER', 'SS-GOLDEN']
+          .find(base => rawMaterial.toLowerCase() === base.toLowerCase() || rawMaterial.toLowerCase().endsWith(base.toLowerCase()));
+        const aliases = { 'MS-BLACK': 'MS-CNC', 'SS-SILVER': 'SS-CNC', 'SS-GOLDEN': 'SG-CNC' };
+        const material = aliases[reportMaterial] || reportMaterial || rawMaterial;
+        const gauge = frame.cnc_gauge || frame.gauge || '';
+        const size = frame.sheet_size || '';
+        if (sign > 0) {
+          result.usage_detail.push({
+            material,
+            gauge,
+            sheet_size: size,
+            bill_category: categoryKey,
+            area: Number(frame.area) || 0,
+            pcs: Number(frame.pcs) || 1,
+            amount: Number(frame.total) || 0,
+            sr_no: bill.sr_no,
+            client_name: bill.client_name,
+            used_at: bill.created_at,
+          });
+        }
+        let usage = result.material_usage.find(row =>
+          row.material === material &&
+          row.gauge === gauge &&
+          row.sheet_size === size &&
+          row.bill_category === categoryKey
+        );
+        if (!usage && sign > 0) {
+          usage = { material, gauge, sheet_size: size, bill_category: categoryKey, total_area: 0, total_amount: 0, items: 0, clients: '' };
+          result.material_usage.push(usage);
+        }
+        if (usage) {
+          usage.total_area = (Number(usage.total_area) || 0) + sign * (Number(frame.area) || 0);
+          usage.total_amount = (Number(usage.total_amount) || 0) + sign * (Number(frame.total) || 0);
+          usage.items = (Number(usage.items) || 0) + sign * (Number(frame.pcs) || 1);
+          const clients = String(usage.clients || '').split(', ').filter(Boolean);
+          if (sign > 0 && bill.client_name && !clients.includes(bill.client_name)) clients.push(bill.client_name);
+          if (usage.items <= 0) result.material_usage = result.material_usage.filter(row => row !== usage);
+          else usage.clients = clients.join(', ');
+        }
+      }
+
+      result.recent_bills = (result.recent_bills || []).filter(row => !sameBillId(row.id, bill.id));
+      if (sign > 0) {
+        result.recent_bills.unshift({
+          id: bill.id,
+          sr_no: bill.sr_no,
+          client_name: bill.client_name,
+          net_total: bill.net_total,
+          paid_amount: bill.paid_amount,
+          remaining_balance: bill.remaining_balance,
+          payment_status: bill.payment_status,
+          created_at: bill.created_at,
+          pending_changes: true,
+        });
+        result.recent_bills = result.recent_bills.slice(0, 50);
+      }
+    };
+
+    const latestBillMutations = new Map();
+    for (const operation of queue) {
+      if (!['bill_update', 'bill_delete'].includes(operation.kind)) continue;
+      latestBillMutations.set(resolveBillId(operation.body.id), operation);
+    }
+    for (const [billId, operation] of latestBillMutations) {
+      const recent = (result.recent_bills || []).find(bill => Number(bill.id) === billId);
+      const before = operation.before || getCachedBill(billId) || recent;
+      if (!before) continue;
+      changeBillReport(before, -1);
+      if (operation.kind === 'bill_update') {
+        changeBillReport(calculatePendingBill(operation, before), 1);
+      }
+    }
+
     for (const bill of pendingBills().filter(item => inPeriod(item.created_at))) {
       add('bill_count', 1);
       add('gross_total', Number(bill.grand_total) || 0);
@@ -454,6 +859,25 @@ function addQueuedChanges(url, response) {
       result.personal_expenses = (Number(result.personal_expenses) || 0) + (Number(bill.personal_total) || 0);
       result.profit = (Number(result.profit) || 0) + (Number(bill.paid_amount) || 0) - (Number(bill.personal_total) || 0);
       result.recent_bills = [{ ...bill, pending: true }, ...(result.recent_bills || [])];
+      result.usage_detail = result.usage_detail || [];
+      for (const frame of bill.frames) {
+        const rawMaterial = String(frame.cnc_material || frame.material || '').trim() || '(no material)';
+        const reportMaterial = ['MS-CNC', 'SS-CNC', 'SG-CNC', 'GP', 'MS-BLACK', 'SS-SILVER', 'SS-GOLDEN']
+          .find(base => rawMaterial.toLowerCase() === base.toLowerCase() || rawMaterial.toLowerCase().endsWith(base.toLowerCase()));
+        const aliases = { 'MS-BLACK': 'MS-CNC', 'SS-SILVER': 'SS-CNC', 'SS-GOLDEN': 'SG-CNC' };
+        result.usage_detail.push({
+          material: aliases[reportMaterial] || reportMaterial || rawMaterial,
+          gauge: frame.cnc_gauge || frame.gauge || '',
+          sheet_size: frame.sheet_size || '',
+          bill_category: frame.bill_category || '',
+          area: Number(frame.area) || 0,
+          pcs: Number(frame.pcs) || 1,
+          amount: Number(frame.total) || 0,
+          sr_no: bill.sr_no,
+          client_name: bill.client_name,
+          used_at: bill.created_at,
+        });
+      }
 
       result.by_client = result.by_client || [];
       let client = result.by_client.find(row => row.client_name === bill.client_name);
@@ -505,7 +929,11 @@ function addQueuedChanges(url, response) {
     }
 
     const remainingByBill = new Map();
-    for (const payment of queue.filter(item => item.kind === 'payment' && Number(item.body.bill_id) > 0)) {
+    for (const payment of queue.filter(item =>
+      item.kind === 'payment' &&
+      Number(item.body.bill_id) > 0 &&
+      !queue.some(operation => operation.kind === 'bill_update' && sameBillId(operation.body.id, item.body.bill_id))
+    )) {
       const billId = Number(payment.body.bill_id);
       const bill = getCachedBill(billId);
       if (!bill || !inPeriod(bill.created_at)) continue;
@@ -542,6 +970,29 @@ function addQueuedChanges(url, response) {
         result.business_expenses = (Number(result.business_expenses) || 0) + amount;
       }
       result.profit = (Number(result.profit) || 0) - amount;
+    }
+    const latestExpenseMutations = new Map();
+    for (const operation of queue) {
+      if (!['expense_update', 'expense_delete'].includes(operation.kind)) continue;
+      const type = apiUrl(operation.url).searchParams.get('type') || 'business';
+      latestExpenseMutations.set(`${type}:${resolveOfflineRecordId('expense', operation.body.id)}`, operation);
+    }
+    for (const [key, operation] of latestExpenseMutations) {
+      const type = key.slice(0, key.indexOf(':'));
+      const before = operation.before || getCachedExpense(resolveOfflineRecordId('expense', operation.body.id), type);
+      const after = operation.kind === 'expense_update' ? operation.body : null;
+      const applyExpenseDelta = (expense, direction) => {
+        if (!expense || !inPeriod(expense.expense_date)) return;
+        const amount = (Number(expense.amount) || 0) * direction;
+        if (type === 'personal') {
+          result.personal_expenses = (Number(result.personal_expenses) || 0) + amount;
+        } else {
+          result.business_expenses = (Number(result.business_expenses) || 0) + amount;
+        }
+        result.profit = (Number(result.profit) || 0) - amount;
+      };
+      applyExpenseDelta(before, -1);
+      applyExpenseDelta(after, 1);
     }
     if (Array.isArray(result.stock)) applyPendingStockChanges(result.stock, queue);
   }

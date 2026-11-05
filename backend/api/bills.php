@@ -108,8 +108,8 @@ try {
             if ($action === 'create' || $action === 'update') {
                 $isUpdate = ($action === 'update');
                 $billId = $isUpdate ? (int)($input['id'] ?? 0) : 0;
-                $mutationId = $isUpdate ? null : getOfflineMutationId();
-                if (!$isUpdate) {
+                $mutationId = getOfflineMutationId();
+                if (!$isUpdate || $mutationId !== null) {
                     ensureOfflineMutationColumn($db, 'bills');
                 }
                 if ($mutationId !== null) {
@@ -127,6 +127,7 @@ try {
                 $frames = $input['frames'] ?? [];
                 if (empty($frames)) jsonResponse(['error' => 'At least one frame required'], 400);
 
+                ensureDataChangeCounterTable($db);
                 $db->beginTransaction();
                 if (!$isUpdate) {
                     $db->query('SELECT id FROM company WHERE id=1 FOR UPDATE')->fetch();
@@ -182,17 +183,29 @@ try {
                 }
 
                 if ($isUpdate) {
+                    $existingBill = $db->prepare('SELECT id FROM bills WHERE id=? FOR UPDATE');
+                    $existingBill->execute([$billId]);
+                    if (!$existingBill->fetch()) {
+                        $db->rollBack();
+                        jsonResponse(['error' => 'Bill not found'], 404);
+                    }
                     // Refund stock first
                     refundStockForBill($db, $billId);
 
-                    $stmt = $db->prepare('UPDATE bills SET client_name=?, client_phone=?, grand_total=?, discount=?, net_total=?, paid_amount=?, remaining_balance=?, payment_status=?, personal_total=?, notes=?, updated_at=NOW() WHERE id=?');
-                    $stmt->execute([
+                    $updateSql = 'UPDATE bills SET client_name=?, client_phone=?, grand_total=?, discount=?, net_total=?, paid_amount=?, remaining_balance=?, payment_status=?, personal_total=?, notes=?, updated_at=NOW()';
+                    $updateParams = [
                         $clientName,
                         trim($input['client_phone'] ?? ''),
                         $grand, $discount, $net, $paid, $remaining, $status, $personalTotal,
-                        $input['notes'] ?? '',
-                        $billId
-                    ]);
+                        $input['notes'] ?? ''
+                    ];
+                    if ($mutationId !== null) {
+                        $updateSql .= ', offline_mutation_id=?';
+                        $updateParams[] = $mutationId;
+                    }
+                    $updateSql .= ' WHERE id=?';
+                    $updateParams[] = $billId;
+                    $db->prepare($updateSql)->execute($updateParams);
 
                     // Delete old frames & personal
                     $db->prepare('DELETE FROM bill_frames WHERE bill_id=?')->execute([$billId]);
@@ -286,6 +299,7 @@ try {
                        ->execute([$billId, (float)$input['new_payment'], $input['payment_note'] ?? 'Payment']);
                 }
 
+                bumpDataChangeToken($db);
                 $db->commit();
                 jsonResponse(['success' => true, 'bill_id' => $billId, 'sr_no' => $isUpdate ? null : $srNo]);
             }
@@ -314,6 +328,7 @@ try {
                     }
                 }
 
+                ensureDataChangeCounterTable($db);
                 $db->beginTransaction();
                 $stmt = $db->prepare('SELECT * FROM bills WHERE id=? FOR UPDATE');
                 $stmt->execute([$billId]);
@@ -328,6 +343,7 @@ try {
                    ->execute([$newPaid, $remaining, $status, $billId]);
                 $db->prepare('INSERT INTO payment_history (bill_id, amount, note, offline_mutation_id) VALUES (?,?,?,?)')
                    ->execute([$billId, $amount, $note, $mutationId]);
+                bumpDataChangeToken($db);
                 $db->commit();
                 jsonResponse(['success' => true, 'paid_amount' => $newPaid, 'remaining' => $remaining, 'status' => $status]);
             }
@@ -339,9 +355,17 @@ try {
             $id = (int)($_GET['id'] ?? 0);
             if ($id <= 0) jsonResponse(['error' => 'Invalid ID'], 400);
 
+            ensureDataChangeCounterTable($db);
             $db->beginTransaction();
+            $existingBill = $db->prepare('SELECT id FROM bills WHERE id=? FOR UPDATE');
+            $existingBill->execute([$id]);
+            if (!$existingBill->fetch()) {
+                $db->commit();
+                jsonResponse(['success' => true]);
+            }
             refundStockForBill($db, $id);
             $db->prepare('DELETE FROM bills WHERE id=?')->execute([$id]);
+            bumpDataChangeToken($db);
             $db->commit();
             jsonResponse(['success' => true]);
             break;
@@ -418,13 +442,14 @@ function consumeStockForBill(PDO $db, int $billId): void {
 }
 
 function refundStockForBill(PDO $db, int $billId): void {
-    // Get previous log entries for this bill and reverse them
-    $logs = $db->prepare('SELECT * FROM stock_log WHERE bill_id=? AND change_qty < 0');
+    // Reverse the bill's net stock consumption so repeated edits do not refund old entries twice.
+    $logs = $db->prepare('SELECT stock_id, SUM(change_qty) AS change_qty FROM stock_log WHERE bill_id=? GROUP BY stock_id HAVING SUM(change_qty) < 0');
     $logs->execute([$billId]);
     foreach ($logs->fetchAll() as $log) {
+        $refund = abs((float)$log['change_qty']);
         $db->prepare('UPDATE sheet_stock SET quantity = quantity + ? WHERE id=?')
-           ->execute([abs($log['change_qty']), $log['stock_id']]);
+           ->execute([$refund, $log['stock_id']]);
         $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason) VALUES (?,?,?,?)')
-           ->execute([$log['stock_id'], $billId, abs($log['change_qty']), 'Refund on edit/delete']);
+           ->execute([$log['stock_id'], $billId, $refund, 'Refund on edit/delete']);
     }
 }

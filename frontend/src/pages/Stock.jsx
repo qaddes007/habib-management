@@ -81,8 +81,8 @@ export default function Stock({ toast }) {
   const deleteStock = async (id, label) => {
     if (!confirm('Delete this stock entry?\n' + label + '\n\nThis cannot be undone.')) return
     try {
-      await api.deleteStock(id)
-      toast('Stock deleted')
+      const result = await api.deleteStock(id)
+      toast(result.pending ? 'Stock deletion saved on this laptop; it will sync later.' : 'Stock deleted')
       loadStock()
     } catch (e) { toast(e.message, true) }
   }
@@ -349,7 +349,7 @@ export default function Stock({ toast }) {
                         <td>{fmtNum(qty * area)}</td>
                         <td className="btn-group">
                           <button className="btn btn-orange btn-sm" onClick={() => adjust(s.id)} disabled={s.pending}>± Adjust</button>
-                          <button className="btn btn-red btn-sm" onClick={() => deleteStock(s.id, s.material + ' ' + s.gauge + ' ' + s.sheet_size)} disabled={s.pending || s.pending_changes}>Delete</button>
+                          <button className="btn btn-red btn-sm" onClick={() => deleteStock(s.id, s.material + ' ' + s.gauge + ' ' + s.sheet_size)}>Delete</button>
                         </td>
                       </tr>
                     )
