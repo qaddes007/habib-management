@@ -1010,6 +1010,51 @@ function getCachedResponse(key) {
   }
 }
 
+function getOfflineListFallback(url) {
+  const requested = apiUrl(url);
+  const action = requested.searchParams.get('action') || '';
+  const isBillsList = requested.pathname.endsWith('/bills.php') && action === 'list';
+  const isExpenseList = requested.pathname.endsWith('/expenses.php');
+  if (!isBillsList && !isExpenseList) return null;
+
+  const rowsById = new Map();
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(API_CACHE_PREFIX)) continue;
+    let cachedUrl;
+    try {
+      cachedUrl = decodeURIComponent(key.slice(API_CACHE_PREFIX.length));
+    } catch {
+      continue;
+    }
+
+    let cachedRequest;
+    try {
+      cachedRequest = new URL(cachedUrl, window.location.href);
+    } catch {
+      continue;
+    }
+    if (cachedRequest.origin !== requested.origin || cachedRequest.pathname !== requested.pathname) continue;
+    if (isBillsList && cachedRequest.searchParams.get('action') !== 'list') continue;
+    if (isExpenseList &&
+      (cachedRequest.searchParams.get('type') || 'business') !== (requested.searchParams.get('type') || 'business')) continue;
+
+    const data = getCachedResponse(key)?.data;
+    if (!Array.isArray(data)) continue;
+    for (const row of data) {
+      if (row?.id !== undefined) rowsById.set(String(row.id), row);
+    }
+  }
+
+  const data = [...rowsById.values()];
+  return {
+    success: true,
+    data,
+    total: isBillsList ? data.length : data.reduce((sum, row) => sum + (Number(row.amount) || 0), 0),
+    page: Number(requested.searchParams.get('page')) || 1,
+  };
+}
+
 function getCachedBill(id) {
   const key = API_CACHE_PREFIX + encodeURIComponent(`${API_BASE}/bills.php?action=get&id=${id}`);
   return getCachedResponse(key)?.data;
@@ -1073,6 +1118,8 @@ async function request(url, opts = {}) {
   if (method === 'GET' && (!apiOnline || navigator.onLine === false)) {
     const cached = cachedResponse();
     if (cached !== null) return addQueuedChanges(url, cached);
+    const fallback = getOfflineListFallback(url);
+    if (fallback !== null) return addQueuedChanges(url, fallback);
   }
 
   let res;
@@ -1093,6 +1140,8 @@ async function request(url, opts = {}) {
     if (method === 'GET') {
       const cached = cachedResponse();
       if (cached !== null) return addQueuedChanges(url, cached);
+      const fallback = getOfflineListFallback(url);
+      if (fallback !== null) return addQueuedChanges(url, fallback);
     }
     if (method !== 'GET') return enqueueOfflineWrite(url, method, parsedBody, writeKind, mutationId);
     if (e.name === 'TimeoutError' || e.name === 'AbortError') {
@@ -1107,6 +1156,8 @@ async function request(url, opts = {}) {
     if (method === 'GET') {
       const cached = cachedResponse();
       if (cached !== null) return addQueuedChanges(url, cached);
+      const fallback = getOfflineListFallback(url);
+      if (fallback !== null) return addQueuedChanges(url, fallback);
     }
     if (method !== 'GET' && writeKind) {
       return enqueueOfflineWrite(url, method, parsedBody, writeKind, mutationId);

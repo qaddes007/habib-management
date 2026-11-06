@@ -49,7 +49,21 @@ export default function Bills({ toast }) {
       const d = await api.getBill(id)
       if (requestId === thermalRequest.current) setThermalBill(d.data)
     } catch (e) {
-      if (requestId === thermalRequest.current) toast(e.message, true)
+      if (requestId !== thermalRequest.current) return
+      const cachedSummary = bills.find(bill => Number(bill.id) === Number(id))
+      if (cachedSummary) {
+        setThermalBill({
+          ...cachedSummary,
+          frames: [],
+          payment_history: [],
+          personal_expenses: [],
+          company: {},
+          offline_summary: true,
+        })
+        toast('Offline: only the saved bill summary is available; item details were not cached.', true)
+      } else {
+        toast(e.message, true)
+      }
     }
   }
 

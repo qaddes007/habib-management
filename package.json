@@ -1,12 +1,12 @@
 {
   "name": "s-habib-steel-desktop",
-  "version": "1.0.16",
+  "version": "1.0.18",
   "description": "S. HABIB STEEL & LASER CRAFT Management Desktop Application",
   "author": "S. HABIB STEEL & LASER CRAFT",
   "main": "electron-main.cjs",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
+    "build": "npm --prefix frontend run build && electron-builder",
     "release": "npm version patch && electron-builder --publish always"
   },
   "dependencies": {

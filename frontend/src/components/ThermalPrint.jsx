@@ -103,11 +103,26 @@ export default function ThermalPrint({ bill, onClose }) {
     })
     printDocument.body.appendChild(content)
 
-    printWindow.onload = () => {
-      printWindow.focus()
-      printWindow.print()
-    }
+    const imagesReady = Array.from(printDocument.images).map(image => {
+      if (image.complete) return Promise.resolve()
+      return new Promise(resolve => {
+        image.addEventListener('load', resolve, { once: true })
+        image.addEventListener('error', resolve, { once: true })
+      })
+    })
     printDocument.close()
+
+    Promise.race([
+      Promise.all(imagesReady),
+      new Promise(resolve => printWindow.setTimeout(resolve, 1500)),
+    ]).then(() => {
+      if (printWindow.closed) return
+      printWindow.requestAnimationFrame(() => printWindow.requestAnimationFrame(() => {
+        if (printWindow.closed) return
+        printWindow.focus()
+        printWindow.print()
+      }))
+    })
   }
 
   const copyText = () => {
@@ -122,6 +137,11 @@ export default function ThermalPrint({ bill, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 360 }}>
         <h2 style={{ fontSize: '0.95rem' }}>80mm PRINT — Preview</h2>
+        {bill.offline_summary && (
+          <div className="offline-notice" role="status" style={{ marginBottom: 10 }}>
+            Offline summary only — item details were not saved on this computer.
+          </div>
+        )}
 
         <div
           id="thermal-print-area"
@@ -227,6 +247,13 @@ export default function ThermalPrint({ bill, onClose }) {
                 </tr>
               </thead>
               <tbody>
+                {bill.offline_summary && (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '6px 1px', borderBottom: '1px dotted #bbb' }}>
+                      Item details unavailable offline
+                    </td>
+                  </tr>
+                )}
                 {frames.map((f, i) => {
                   const gauge = (f.cnc_gauge || f.gauge || '').replace(/ Gauge/gi, '')
                   const mat = (f.material || f.cnc_material || '—').slice(0, 14)
