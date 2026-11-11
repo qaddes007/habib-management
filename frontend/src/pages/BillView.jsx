@@ -4,6 +4,20 @@ import { api, fmt, CAT_LABELS, shareWhatsApp, formatBillWhatsApp, shareAsImage }
 import ThermalPrint from '../components/ThermalPrint'
 import { useAutoRefresh } from '../hooks/useLiveSync'
 
+function normalizeGaugeText(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw || raw === '0' || raw === '1') return '12 Gauge'
+  const compact = raw.replace(/\s+/g, ' ').replace(/\s*Gauge\s*$/i, '').trim()
+  if (!compact || compact === '0' || compact === '1') return '12 Gauge'
+  return /^\d+(?:\.\d+)?$/i.test(compact) ? `${compact} Gauge` : raw.trim()
+}
+
+function formatBoolText(value) {
+  if (value === true || value === 1 || value === '1') return 'Yes'
+  if (value === false || value === 0 || value === '0' || value === null || value === undefined || value === '') return ''
+  return String(value)
+}
+
 function StatusBadge({ status }) {
   const display = status === 'PAID' ? 'PAID' : 'UNPAID'
   const cls = status === 'PAID' ? 'badge-paid' : 'badge-unpaid'
@@ -70,6 +84,23 @@ export default function BillView({ toast }) {
   const frames = bill.frames || []
   const payments = bill.payment_history || []
   const company = bill.company || {}
+  const defaultKgMap = {
+    'MS-CNC': 42,
+    'SS-CNC': 40,
+    'SG-CNC': 40,
+    GP: 35,
+  }
+  const totalWeight = frames.reduce((sum, f) => {
+    if (f.bill_category === 'bending_only') return sum + (Number(f.bend_count) || 0)
+    const material = (f.material || f.cnc_material || 'MS-CNC').toString().trim()
+    const baseKg = defaultKgMap[material] || 40
+    const area = Number(f.area) || 0
+    const pcs = Number(f.pcs) || 1
+    const width = Number(f.width) || 0
+    const length = Number(f.length) || 0
+    const calcArea = area > 0 ? area : width * length * pcs
+    return sum + (calcArea > 0 ? calcArea / 32 * baseKg : 0)
+  }, 0)
 
   return (
     <div className="container">
@@ -136,35 +167,35 @@ export default function BillView({ toast }) {
               const bendTotal = bendRate * bendCount
               const isFancy = f.bill_category === 'fancy'
               const isBendOnly = f.bill_category === 'bending_only'
+              const isSheetSale = f.bill_category === 'sheet_sale'
+              const isOnlyCutting = f.bill_category === 'only_cutting'
               return (
                 <tr key={f.id || i}>
                   <td>{i + 1}</td>
                   <td>{CAT_LABELS[f.bill_category] || f.bill_category || '—'}</td>
                   <td>
-                    {isBendOnly
-                      ? 'Bending only'
-                      : (f.material || f.cnc_material || '—')}
-                    {!isBendOnly && (f.gauge || f.cnc_gauge) ? ` / ${f.gauge || f.cnc_gauge}` : ''}
+                    {f.material || f.cnc_material || (isBendOnly ? 'Bending only' : '—')}
+                    {(f.gauge || f.cnc_gauge) ? ` / ${normalizeGaugeText(f.gauge || f.cnc_gauge)}` : ''}
+                    {isBendOnly && <><br /><small>{Number(f.bend_count || 0).toFixed(2)} Kg sold</small></>}
                     {tags.length > 0 && <><br /><small className="text-muted">{tags.join(', ')}</small></>}
                     {f.bill_category === 'cnc_pipe' && (f.color_yes || f.color_no || f.fitting_yes || f.fitting_no) && (
                       <><br /><small className="text-muted">
-                        Color: {f.color_yes ? 'Yes ✓' : f.color_no ? 'No' : '—'}
-                        {' · '}
-                        Fitting: {f.fitting_yes ? 'Yes ✓' : f.fitting_no ? 'No' : '—'}
+                        {f.color_yes || f.color_no ? `Color: ${f.color_yes ? 'Yes ✓' : 'No'}` : ''}
+                        {f.fitting_yes || f.fitting_no ? ` · Fitting: ${f.fitting_yes ? 'Yes ✓' : 'No'}` : ''}
                       </small></>
                     )}
                     {f.extra_item_name && <><br /><small>+ {f.extra_item_name}{f.extra_item_price ? ` (${Number(f.extra_item_price).toFixed(2)})` : ''}</small></>}
                   </td>
                   <td>
                     {isFancy
-                      ? 'Direct'
-                      : isBendOnly
-                        ? '—'
+                      ? `${Number(f.area || f.width || 0).toFixed(2)} sqft`
+                      : (isBendOnly || isSheetSale || isOnlyCutting)
+                        ? `${f.sheet_size || '4x8'} sheet`
                         : `${Number(f.width || 0).toFixed(2)} × ${Number(f.length || 0).toFixed(2)} ft`}
                   </td>
-                  <td>{f.pcs}</td>
-                  <td>{isFancy ? Number(f.direct_price || 0).toFixed(2) : isBendOnly ? '—' : Number(f.rate || 0).toFixed(2)}</td>
-                  <td>{isBendOnly || isFancy ? '—' : Number(f.area || 0).toFixed(2)}</td>
+                  <td>{isBendOnly ? `${Number(f.bend_count || 0).toFixed(2)} Kg` : isFancy ? `${Number(f.area || f.width || 0).toFixed(2)} sqft` : isOnlyCutting ? '—' : isSheetSale ? `${f.pcs} sheets` : f.pcs}</td>
+                  <td>{isFancy ? `${Number(f.rate || 0).toFixed(2)} / sqft` : isBendOnly ? `${Number(f.bend_rate || 0).toFixed(2)} / Kg` : isSheetSale ? `${Number(f.direct_price || 0).toFixed(2)} / sheet` : isOnlyCutting ? '—' : Number(f.rate || 0).toFixed(2)}</td>
+                  <td>{isOnlyCutting || isSheetSale ? '—' : `${Number(f.area || (isFancy ? f.width : 0) || 0).toFixed(2)} sqft`}</td>
                   <td>
                     {bendTotal > 0
                       ? <span title={`${bendCount} × ${bendRate}`}>{Number(bendTotal).toFixed(2)}</span>
@@ -186,6 +217,7 @@ export default function BillView({ toast }) {
           return (
             <div className="grand-bar" style={{ marginTop: 20 }}>
               <div className="gt-item"><div className="gt-label">Grand Total</div><div className="gt-value">{fmt(bill.grand_total)}</div></div>
+              <div className="gt-item"><div className="gt-label">Weight</div><div className="gt-value" style={{ color: '#7c3aed' }}>{totalWeight.toFixed(2)} Kg</div></div>
               {billBendTotal > 0 && (
                 <div className="gt-item">
                   <div className="gt-label">Bending Total</div>

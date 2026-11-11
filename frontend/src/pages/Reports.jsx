@@ -31,7 +31,7 @@ function monthsForYear(year) {
   return out
 }
 
-const ALL_CAT_KEYS = ['cnc_only', 'cnc_pipe', 'fancy', 'pipe_grill', 'bending_sheet', 'bending_only']
+const ALL_CAT_KEYS = ['cnc_only', 'cnc_pipe', 'fancy', 'sheet_sale', 'only_cutting', 'pipe_grill', 'bending_sheet', 'bending_only']
 
 export default function Reports({ toast }) {
   const [data, setData] = useState(null)

@@ -215,6 +215,39 @@ a:hover { color: var(--text-orange); }
   animation: fadeUp 0.35s ease both;
 }
 .card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+.bill-setup-card {
+  background: linear-gradient(180deg, rgba(8, 45, 65, 0.8), rgba(0, 19, 30, 0.96));
+}
+.bill-header-grid {
+  align-items: end;
+}
+.bill-payment-group {
+  min-width: 180px;
+}
+.bill-save-group {
+  min-width: 180px;
+}
+.stock-summary-card {
+  background: rgba(3, 26, 35, 0.8);
+}
+.stock-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.stock-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+}
+.stock-summary-item.ok { border-color: rgba(34, 197, 94, 0.7); }
+.stock-summary-item.low { border-color: rgba(239, 68, 68, 0.7); }
+.stock-summary-item strong { color: var(--text-orange); }
+.stock-summary-item small { color: var(--text-muted); }
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -575,6 +608,24 @@ tr:hover td { background: rgba(249,115,22,0.06); }
   .app-header, .nav-links, .btn, .no-print { display: none !important; }
   body { background: white !important; color: black !important; }
   .card { box-shadow: none; border: 1px solid #ccc; }
+  #printArea {
+    background: white !important;
+    color: black !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+  }
+  #printArea *,
+  #printArea table,
+  #printArea th,
+  #printArea td,
+  #printArea h2,
+  #printArea p,
+  #printArea span,
+  #printArea strong,
+  #printArea small {
+    color: #000 !important;
+    background: transparent !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -892,8 +943,43 @@ input:focus, select:focus, textarea:focus {
   background: #fff !important;
 }
 
+#printArea {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#printArea {
+  background: #fff !important;
+  color: #000 !important;
+  border: 1px solid #d1d5db !important;
+  box-shadow: none !important;
+}
+
+#printArea .form-grid {
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+#printArea table {
+  font-size: 0.97rem;
+}
+
+#printArea th,
+#printArea td {
+  padding: 11px 12px;
+}
+
+#printArea .grand-bar {
+  padding: 18px 22px;
+  gap: 16px;
+}
+
+#printArea .gt-value {
+  font-size: 1.35rem;
+}
+
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  @page { size: A4 landscape; margin: 10mm 12mm; }
 
   html, body {
     background: #fff !important;
@@ -911,9 +997,9 @@ input:focus, select:focus, textarea:focus {
     animation: none !important;
     transform: none !important;
     font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 12pt !important;
+    font-size: 14pt !important;
     font-weight: 700 !important;
-    line-height: 1.4 !important;
+    line-height: 1.45 !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
@@ -933,23 +1019,25 @@ input:focus, select:focus, textarea:focus {
   #printArea .grand-bar {
     background: #fff !important;
     border: 1px solid #000 !important;
+    padding: 14px 18px !important;
+    gap: 18px !important;
   }
 
   #printArea th,
   #printArea td {
     border-color: #000 !important;
-    padding: 5px 3px !important;
+    padding: 7px 6px !important;
     overflow-wrap: anywhere !important;
   }
 
   #printArea table {
-    font-size: 10pt !important;
+    font-size: 11.5pt !important;
     width: 100% !important;
     table-layout: fixed !important;
   }
 
   #printArea small {
-    font-size: 9pt !important;
+    font-size: 9.5pt !important;
   }
 
   #printArea .gt-label {
@@ -957,7 +1045,7 @@ input:focus, select:focus, textarea:focus {
   }
 
   #printArea .gt-value {
-    font-size: 13pt !important;
+    font-size: 15pt !important;
   }
 
   #printArea tr {
