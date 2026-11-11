@@ -11,6 +11,14 @@ set_exception_handler(function($e) {
 });
 
 $db = getDB();
+function bendingSheetArea(PDO $db, string $material, string $gauge, string $sheetSize, float $kgSold): float {
+    if (!preg_match('/^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)$/i', $sheetSize, $matches)) return 0.0;
+    $sheetArea = (float)$matches[1] * (float)$matches[2];
+    $stmt = $db->prepare('SELECT kg_per_sheet FROM sheet_stock WHERE material=? AND gauge=? AND sheet_size=? LIMIT 1');
+    $stmt->execute([$material, $gauge, $sheetSize]);
+    $kgPerSheet = (float)$stmt->fetchColumn();
+    return $kgPerSheet > 0 ? ($kgSold / $kgPerSheet) * $sheetArea : 0.0;
+}
 // ensure bend columns exist
 try {
     $db->exec("ALTER TABLE bill_frames ADD COLUMN bend_rate DECIMAL(12,2) DEFAULT 0");
@@ -18,9 +26,9 @@ try {
 try {
     $db->exec("ALTER TABLE bill_frames ADD COLUMN bend_count DECIMAL(12,2) DEFAULT 0");
 } catch (Exception $e) {}
-// Expand bill_category ENUM so bending_sheet / bending_only actually save
+// Expand bill_category ENUM so every bill category can be saved.
 try {
-    $db->exec("ALTER TABLE bill_frames MODIFY COLUMN bill_category ENUM('cnc_only','cnc_pipe','fancy','pipe_grill','bending_sheet','bending_only') DEFAULT 'cnc_only'");
+    $db->exec("ALTER TABLE bill_frames MODIFY COLUMN bill_category ENUM('cnc_only','cnc_pipe','fancy','sheet_sale','only_cutting','pipe_grill','bending_sheet','bending_only') DEFAULT 'cnc_only'");
 } catch (Exception $e) {}
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
@@ -151,7 +159,15 @@ try {
                     $bendCount = (float)($f['bend_count'] ?? 0);
                     $bendTotal = $bendRate * $bendCount;
                     if ($cat === 'fancy') {
+                        $area = (float)($f['width'] ?? 0);
+                        $rate = (float)($f['rate'] ?? 0);
+                        $total = ($area > 0 || $rate > 0)
+                            ? $area * $rate
+                            : $pcs * (float)($f['direct_price'] ?? 0);
+                    } elseif ($cat === 'sheet_sale') {
                         $total = $pcs * (float)($f['direct_price'] ?? 0);
+                    } elseif ($cat === 'only_cutting') {
+                        $total = (float)($f['direct_price'] ?? 0);
                     } elseif ($cat === 'bending_only') {
                         $total = $bendTotal;
                     } elseif ($cat === 'bending_sheet') {
@@ -246,10 +262,22 @@ try {
                     $bendCount = (float)($f['bend_count'] ?? 0);
                     $bendTotal = $bendRate * $bendCount;
                     if ($cat === 'fancy') {
+                        $area = ($w > 0 || $r > 0) ? $w : 0;
+                        $total = $area > 0 || $r > 0 ? $area * $r + $extra : $pcs * $dp + $extra;
+                    } elseif ($cat === 'sheet_sale') {
                         $area = 0;
                         $total = $pcs * $dp + $extra;
-                    } elseif ($cat === 'bending_only') {
+                    } elseif ($cat === 'only_cutting') {
                         $area = 0;
+                        $total = $dp + $extra;
+                    } elseif ($cat === 'bending_only') {
+                        $area = bendingSheetArea(
+                            $db,
+                            (string)($f['material'] ?? ''),
+                            (string)($f['gauge'] ?? '12 Gauge'),
+                            (string)($f['sheet_size'] ?? '4x8'),
+                            $bendCount
+                        );
                         $total = $bendTotal + $extra;
                     } elseif ($cat === 'bending_sheet') {
                         $area = $w * $l * $pcs;
@@ -408,21 +436,38 @@ function normalizeSheetMaterial(string $mat): ?string {
     return null;
 }
 
+function normalizeGaugeValue(?string $value): string {
+    $value = trim((string)($value ?? ''));
+    if ($value === '' || $value === '0' || $value === '1') return '12 Gauge';
+    $value = preg_replace('/\s+/', ' ', $value);
+    $clean = preg_replace('/\s*Gauge\s*$/i', '', $value);
+    $clean = trim((string)$clean);
+    if ($clean === '' || $clean === '0' || $clean === '1') return '12 Gauge';
+    if (preg_match('/^\d+(?:\.\d+)?$/', $clean)) return $clean . ' Gauge';
+    return $value;
+}
+
 function consumeStockForBill(PDO $db, int $billId): void {
-    $stmt = $db->prepare("SELECT * FROM bill_frames WHERE bill_id=? AND bill_category IN ('cnc_only','cnc_pipe','bending_sheet')");
+    $stmt = $db->prepare("SELECT * FROM bill_frames WHERE bill_id=? AND bill_category IN ('cnc_only','cnc_pipe','bending_sheet','bending_only','sheet_sale')");
     $stmt->execute([$billId]);
     $frames = $stmt->fetchAll();
 
     foreach ($frames as $f) {
-        $raw = $f['cnc_material'] ?: $f['material'];
+        $isBendingOnly = $f['bill_category'] === 'bending_only';
+        $isSheetSale = $f['bill_category'] === 'sheet_sale';
+        $raw = ($isBendingOnly || $isSheetSale) ? $f['material'] : ($f['cnc_material'] ?: $f['material']);
         $mat = normalizeSheetMaterial((string)$raw);
         if (!$mat) continue; // skip pipe-only / unknown
 
-        $gauge = $f['cnc_gauge'] ?: $f['gauge'];
+        $gauge = ($isBendingOnly || $isSheetSale)
+            ? normalizeGaugeValue($f['gauge'])
+            : normalizeGaugeValue($f['cnc_gauge'] ?: $f['gauge']);
         $size = $f['sheet_size'] ?: '4x8';
         $area = (float)$f['area'];
         $sheetArea = SHEET_AREAS[$size] ?? 32.0;
-        $sheetsNeeded = $area > 0 ? round($area / $sheetArea, 2) : 0;
+        $sheetsNeeded = $isSheetSale
+            ? max(0, (float)$f['pcs'])
+            : ($area > 0 ? round($area / $sheetArea, 2) : 0);
 
         if ($sheetsNeeded <= 0) continue;
 

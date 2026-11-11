@@ -391,9 +391,17 @@ function calculatePendingBill(operation, existingBill = null) {
     const width = Number(frame.width) || 0;
     const length = Number(frame.length) || 0;
     const bend = (Number(frame.bend_rate) || 0) * (Number(frame.bend_count) || 0);
-    const area = ['fancy', 'bending_only'].includes(frame.bill_category) ? 0 : width * length * pcs;
+    const area = frame.bill_category === 'fancy'
+      ? (Number(frame.width) || 0)
+      : ['bending_only', 'sheet_sale', 'only_cutting'].includes(frame.bill_category) ? 0 : width * length * pcs;
     let total = frame.bill_category === 'fancy'
-      ? pcs * (Number(frame.direct_price) || 0)
+      ? ((Number(frame.width) > 0 || Number(frame.rate) > 0)
+        ? area * (Number(frame.rate) || 0)
+        : pcs * (Number(frame.direct_price) || 0))
+      : frame.bill_category === 'sheet_sale'
+        ? pcs * (Number(frame.direct_price) || 0)
+        : frame.bill_category === 'only_cutting'
+          ? Number(frame.direct_price) || 0
       : frame.bill_category === 'bending_only'
         ? bend
         : area * (Number(frame.rate) || 0) + (frame.bill_category === 'bending_sheet' ? bend : 0);
@@ -1080,8 +1088,10 @@ export const CAT_LABELS = {
   cnc_only: 'CNC Only',
   bending_sheet: 'Bending + Sheet',
   bending_only: 'Only Bending',
+  sheet_sale: 'Complete Sheets',
+  only_cutting: 'Only Cutting',
   cnc_pipe: 'CNC + Pipe',
-  fancy: 'Fancy / Others',
+  fancy: 'Fancy / Sheets',
   pipe_grill: 'Pipe Grill',
 };
 

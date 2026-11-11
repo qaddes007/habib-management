@@ -3,6 +3,20 @@ import { CAT_LABELS } from '../api/client'
 /**
  * 80mm thermal bill — clean columns + logo/QR side by side
  */
+function normalizeGaugeText(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw || raw === '0' || raw === '1') return '12 Gauge'
+  const compact = raw.replace(/\s+/g, ' ').replace(/\s*Gauge\s*$/i, '').trim()
+  if (!compact || compact === '0' || compact === '1') return '12 Gauge'
+  return /^\d+(?:\.\d+)?$/i.test(compact) ? `${compact} Gauge` : raw.trim()
+}
+
+function formatBoolText(value) {
+  if (value === true || value === 1 || value === '1') return 'Y'
+  if (value === false || value === 0 || value === '0' || value === null || value === undefined || value === '') return ''
+  return String(value)
+}
+
 export default function ThermalPrint({ bill, onClose }) {
   if (!bill) return null
 
@@ -255,20 +269,27 @@ export default function ThermalPrint({ bill, onClose }) {
                   </tr>
                 )}
                 {frames.map((f, i) => {
-                  const gauge = (f.cnc_gauge || f.gauge || '').replace(/ Gauge/gi, '')
+                  const isBendOnly = f.bill_category === 'bending_only'
+                  const usesSelectedGauge = ['bending_only', 'sheet_sale', 'only_cutting', 'fancy'].includes(f.bill_category)
+                  const gauge = normalizeGaugeText((usesSelectedGauge ? f.gauge : f.cnc_gauge) || f.gauge || '').replace(/ Gauge/gi, '')
                   const mat = (f.material || f.cnc_material || '—').slice(0, 14)
                   const catLabel = CAT_LABELS[f.bill_category] || ''
                   const w = Number(f.width) || 0
                   const l = Number(f.length) || 0
                   const isFancy = f.bill_category === 'fancy'
-                  const isBendOnly = f.bill_category === 'bending_only'
-                  const sizeStr = isFancy || isBendOnly ? '—' : `${w}x${l}`
+                  const isSheetSale = f.bill_category === 'sheet_sale'
+                  const isOnlyCutting = f.bill_category === 'only_cutting'
+                  const sizeStr = isFancy
+                    ? `${Number(f.area || f.width || 0).toFixed(1)} sqft`
+                    : isBendOnly
+                      ? `${f.sheet_size || '4x8'} / ${Number(f.bend_count || 0).toFixed(1)}kg`
+                      : (isSheetSale || isOnlyCutting) ? `${f.sheet_size || '4x8'}` : `${w}x${l}`
                   const colorFit = []
                   if (f.bill_category === 'cnc_pipe') {
-                    if (f.color_yes) colorFit.push('Color:Y')
-                    else if (f.color_no) colorFit.push('Color:N')
-                    if (f.fitting_yes) colorFit.push('Fit:Y')
-                    else if (f.fitting_no) colorFit.push('Fit:N')
+                    const colorText = f.color_yes ? 'Y' : (f.color_no ? 'N' : '')
+                    const fittingText = f.fitting_yes ? 'Y' : (f.fitting_no ? 'N' : '')
+                    if (colorText) colorFit.push(`Color:${colorText}`)
+                    if (fittingText) colorFit.push(`Fit:${fittingText}`)
                   }
                   const tags = typeof f.tags === 'string' ? JSON.parse(f.tags || '[]') : (f.tags || [])
 
@@ -290,10 +311,10 @@ export default function ThermalPrint({ bill, onClose }) {
                         {sizeStr}
                       </td>
                       <td style={{ fontSize: 9, textAlign: 'center', padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb' }}>
-                        {isBendOnly || isFancy ? '—' : Number(f.area || 0).toFixed(0)}
+                        {isOnlyCutting || isSheetSale ? '—' : Number(f.area || (isFancy ? f.width : 0) || 0).toFixed(2)}
                       </td>
                       <td style={{ fontSize: 9, textAlign: 'center', padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb' }}>
-                        {isBendOnly ? '—' : money(f.rate || f.direct_price || 0)}
+                        {isBendOnly ? `${money(f.bend_rate || 0)}/kg` : isFancy ? `${money(f.rate || 0)}/sf` : isSheetSale ? `${money(f.direct_price || 0)}/sheet` : isOnlyCutting ? '—' : money(f.rate || f.direct_price || 0)}
                       </td>
                       <td style={{ fontSize: 9, textAlign: 'right', padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb', fontWeight: 'bold' }}>
                         {money(f.total)}

@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS bill_frames (
     id INT AUTO_INCREMENT PRIMARY KEY,
     bill_id INT NOT NULL,
     serial INT DEFAULT 1,
-    bill_category ENUM('cnc_only','cnc_pipe','fancy','pipe_grill','bending_sheet','bending_only') DEFAULT 'cnc_only',
+    bill_category ENUM('cnc_only','cnc_pipe','fancy','sheet_sale','only_cutting','pipe_grill','bending_sheet','bending_only') DEFAULT 'cnc_only',
     material VARCHAR(100),
     pipe_material VARCHAR(100),
     cnc_material VARCHAR(100),
