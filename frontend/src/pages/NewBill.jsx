@@ -262,7 +262,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
                 <label>Item Total (PKR)</label>
                 <input type="text" readOnly value={((Number(frame.width) || 0) * (Number(frame.rate) || 0)).toFixed(2)} />
               </div>
-            </div>
+            )}
           </>
         )}
 
@@ -619,7 +619,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
               <input type="text" readOnly
                 value={((parseFloat(frame.width)||0)*(parseFloat(frame.length)||0)*Math.max(1,parseInt(frame.pcs)||1)).toFixed(2)}
                 style={{ opacity: 0.85 }} />
-            </div>
+              </div>
             <div className="form-group">
               <label>Rate per Bend</label>
               <input type="number" value={frame.bend_rate} onChange={e => set('bend_rate', e.target.value)} min="0" step="0.01" />
