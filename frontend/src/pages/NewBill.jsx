@@ -238,10 +238,6 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
               <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
             </div>
             <div className="form-group">
-              <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
-            </div>
-            <div className="form-group">
               <label>Sheet Size</label>
               <SheetSelect value={frame.sheet_size} onChange={v => set('sheet_size', v)} />
             </div>
@@ -592,7 +588,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => { set('gauge', v); set('cnc_gauge', v) }} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size</label>
