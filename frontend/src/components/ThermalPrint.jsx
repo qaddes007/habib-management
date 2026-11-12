@@ -1,13 +1,13 @@
-import { CAT_LABELS } from '../api/client'
+import { CAT_LABELS, getFrameGaugeLabel } from '../api/client'
 
 /**
  * 80mm thermal bill — clean columns + logo/QR side by side
  */
 function normalizeGaugeText(value) {
   const raw = String(value ?? '').trim()
-  if (!raw || raw === '0' || raw === '1') return '12 Gauge'
+  if (!raw || raw === '0') return '12 Gauge'
   const compact = raw.replace(/\s+/g, ' ').replace(/\s*Gauge\s*$/i, '').trim()
-  if (!compact || compact === '0' || compact === '1') return '12 Gauge'
+  if (!compact || compact === '0') return '12 Gauge'
   return /^\d+(?:\.\d+)?$/i.test(compact) ? `${compact} Gauge` : raw.trim()
 }
 
@@ -98,10 +98,16 @@ export default function ThermalPrint({ bill, onClose }) {
       #thermal-text [style*="font-size: 10px"] { font-size: 12px !important; }
       #thermal-text [style*="font-size: 11px"] { font-size: 13px !important; }
       #thermal-text img { max-width: 100%; }
+      #thermal-text img[alt="logo"], #thermal-text img[alt="qr"] {
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
       #thermal-text img[alt="logo"] { filter: grayscale(1) contrast(1.7) brightness(.9) !important; }
       #thermal-text img[alt="qr"] { width: 68px; height: 68px; }
       #thermal-text img[alt="location"] {
-        max-height: 30mm;
+        width: 100%;
+        max-height: 48mm;
         object-fit: contain;
         filter: grayscale(1) contrast(1.7) brightness(.9) !important;
       }
@@ -270,8 +276,8 @@ export default function ThermalPrint({ bill, onClose }) {
                 )}
                 {frames.map((f, i) => {
                   const isBendOnly = f.bill_category === 'bending_only'
-                  const usesSelectedGauge = ['bending_only', 'sheet_sale', 'only_cutting', 'fancy'].includes(f.bill_category)
-                  const gauge = normalizeGaugeText((usesSelectedGauge ? f.gauge : f.cnc_gauge) || f.gauge || '').replace(/ Gauge/gi, '')
+                  const gaugeLabel = getFrameGaugeLabel(f, true)
+                  const gauge = gaugeLabel ? normalizeGaugeText(gaugeLabel).replace(/ Gauge/gi, '') : ''
                   const mat = (f.material || f.cnc_material || '—').slice(0, 14)
                   const catLabel = CAT_LABELS[f.bill_category] || ''
                   const w = Number(f.width) || 0

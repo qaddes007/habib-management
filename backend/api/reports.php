@@ -132,6 +132,7 @@ try {
             bf.cnc_material,
             bf.gauge,
             bf.cnc_gauge,
+            bf.pipe_gauge,
             bf.sheet_size,
             bf.area,
             bf.total,
@@ -166,7 +167,9 @@ try {
             }
         }
 
-        $gauge = $row['cnc_gauge'] ?: $row['gauge'] ?: '';
+        $gauge = $row['bill_category'] === 'pipe_grill'
+            ? ($row['pipe_gauge'] ?: $row['gauge'] ?: '')
+            : ($row['cnc_gauge'] ?: $row['gauge'] ?: '');
         $size = $row['sheet_size'] ?: '';
         $area = (float)$row['area'];
         $pcs = max(1, (int)$row['pcs']);

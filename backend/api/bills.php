@@ -471,10 +471,9 @@ function consumeStockForBill(PDO $db, int $billId): void {
 
         if ($sheetsNeeded <= 0) continue;
 
-        // Match gauge flexibly: "12 Gauge" or "12"
         $gaugeNum = preg_replace('/[^0-9]/', '', (string)$gauge);
-        $s = $db->prepare('SELECT * FROM sheet_stock WHERE material=? AND sheet_size=? AND (gauge=? OR gauge=? OR gauge LIKE ?)');
-        $s->execute([$mat, $size, $gauge, $gaugeNum . ' Gauge', '%' . $gaugeNum . '%']);
+        $s = $db->prepare('SELECT * FROM sheet_stock WHERE material=? AND sheet_size=? AND (gauge=? OR gauge=?)');
+        $s->execute([$mat, $size, $gauge, $gaugeNum . ' Gauge']);
         $stock = $s->fetch();
 
         if ($stock) {

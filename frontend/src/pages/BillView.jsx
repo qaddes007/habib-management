@@ -1,14 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { api, fmt, CAT_LABELS, shareWhatsApp, formatBillWhatsApp, shareAsImage } from '../api/client'
+import { api, fmt, CAT_LABELS, getFrameGaugeLabel, shareWhatsApp, formatBillWhatsApp, shareAsImage } from '../api/client'
 import ThermalPrint from '../components/ThermalPrint'
 import { useAutoRefresh } from '../hooks/useLiveSync'
 
 function normalizeGaugeText(value) {
   const raw = String(value ?? '').trim()
-  if (!raw || raw === '0' || raw === '1') return '12 Gauge'
+  if (!raw || raw === '0') return '12 Gauge'
   const compact = raw.replace(/\s+/g, ' ').replace(/\s*Gauge\s*$/i, '').trim()
-  if (!compact || compact === '0' || compact === '1') return '12 Gauge'
+  if (!compact || compact === '0') return '12 Gauge'
   return /^\d+(?:\.\d+)?$/i.test(compact) ? `${compact} Gauge` : raw.trim()
 }
 
@@ -175,7 +175,7 @@ export default function BillView({ toast }) {
                   <td>{CAT_LABELS[f.bill_category] || f.bill_category || '—'}</td>
                   <td>
                     {f.material || f.cnc_material || (isBendOnly ? 'Bending only' : '—')}
-                    {(f.gauge || f.cnc_gauge) ? ` / ${normalizeGaugeText(f.gauge || f.cnc_gauge)}` : ''}
+                    {getFrameGaugeLabel(f) ? ` / ${normalizeGaugeText(getFrameGaugeLabel(f))}` : ''}
                     {isBendOnly && <><br /><small>{Number(f.bend_count || 0).toFixed(2)} Kg sold</small></>}
                     {tags.length > 0 && <><br /><small className="text-muted">{tags.join(', ')}</small></>}
                     {f.bill_category === 'cnc_pipe' && (f.color_yes || f.color_no || f.fitting_yes || f.fitting_no) && (

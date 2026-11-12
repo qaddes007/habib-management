@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
-import { api, fmtNum, shareWhatsApp, shareAsImage } from '../api/client'
+import { api, fmtNum, shareWhatsApp, shareAsImage, CNC_GAUGES } from '../api/client'
 import { useAutoRefresh } from '../hooks/useLiveSync'
 
 const SHEET_AREAS = { '4x8': 32, '5x8': 40, '4x10': 40, '5x10': 50 }
 const MATERIALS = ['MS-CNC', 'SS-CNC', 'SG-CNC', 'GP']
-const GAUGES = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
 const SIZES = ['4x8', '5x8', '4x10', '5x10']
 
 const emptyForm = {
@@ -95,6 +94,17 @@ export default function Stock({ toast }) {
 
   const materialUsage = report?.material_usage || []
   const stockList = rows.length ? rows : (report?.stock || [])
+  const gaugeOptions = [...new Set([
+    ...CNC_GAUGES.map(g => `${g} Gauge`),
+    ...stockList.map(s => String(s.gauge || '').trim()).filter(Boolean),
+    ...materialUsage.map(m => String(m.gauge || '').trim()).filter(Boolean),
+  ])].sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0))
+  const customGauge = !gaugeOptions.includes(form.gauge)
+  const gaugeFilterOptions = [...new Set([
+    ...CNC_GAUGES.map(String),
+    ...stockList.map(s => String(s.gauge || '').replace(/[^0-9]/g, '')).filter(Boolean),
+    ...materialUsage.map(m => String(m.gauge || '').replace(/[^0-9]/g, '')).filter(Boolean),
+  ])].sort((a, b) => Number(a) - Number(b))
 
   const matchGauge = (gaugeStr, filterG) => {
     if (!filterG) return true
@@ -301,9 +311,17 @@ export default function Stock({ toast }) {
               </div>
               <div className="form-group">
                 <label>Gauge</label>
-                <select value={form.gauge} onChange={e => setForm({ ...form, gauge: e.target.value })}>
-                  {GAUGES.map(g => <option key={g} value={g + ' Gauge'}>{g} Gauge</option>)}
+                <select value={customGauge ? '+ Write Own' : form.gauge} onChange={e => setForm({
+                  ...form,
+                  gauge: e.target.value === '+ Write Own' ? '' : e.target.value,
+                })}>
+                  {gaugeOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                  <option value="+ Write Own">+ Write Own</option>
                 </select>
+                {customGauge && (
+                  <input value={form.gauge} onChange={e => setForm({ ...form, gauge: e.target.value })}
+                    placeholder="Type gauge (e.g. 11 Gauge)" />
+                )}
               </div>
               <div className="form-group">
                 <label>Qty</label>
@@ -376,7 +394,7 @@ export default function Stock({ toast }) {
                 <label>Filter Gauge</label>
                 <select value={filterGauge} onChange={e => setFilterGauge(e.target.value)}>
                   <option value="">All Gauges</option>
-                  {GAUGES.map(g => <option key={g} value={String(g)}>{g} Gauge</option>)}
+                  {gaugeFilterOptions.map(g => <option key={g} value={g}>{g} Gauge</option>)}
                 </select>
               </div>
             </div>

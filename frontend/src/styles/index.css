@@ -981,11 +981,35 @@ input:focus, select:focus, textarea:focus {
 @media print {
   @page { size: A4 landscape; margin: 10mm 12mm; }
 
-  html, body {
+  html, body, #root {
     background: #fff !important;
     background-image: none !important;
     color: #000 !important;
     margin: 0 !important;
+  }
+
+  *, *::before, *::after {
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+  }
+
+  .container, .card, .modal, .table-wrap, .stats-bar, .stat-card {
+    background: #fff !important;
+    background-color: #fff !important;
+    color: #000 !important;
+    border-color: #999 !important;
+    transform: none !important;
+  }
+
+  .app-header, .nav-links, .btn, .no-print {
+    display: none !important;
+  }
+
+  table, thead, tbody, tr, th, td {
+    background: #fff !important;
+    color: #000 !important;
   }
 
   #printArea {

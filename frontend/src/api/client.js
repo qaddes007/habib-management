@@ -489,16 +489,17 @@ function applyPendingStockChanges(rows, queue) {
       const sheetsNeeded = area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0;
       if (sheetsNeeded <= 0) continue;
 
-      const gauge = frame.cnc_gauge || frame.gauge || '';
-      const gaugeNumber = String(gauge).replace(/[^0-9]/g, '');
+      const gauge = frame.bill_category === 'pipe_grill'
+        ? frame.pipe_gauge || frame.gauge || ''
+        : frame.cnc_gauge || frame.gauge || '';
       const size = frame.sheet_size || '4x8';
       const existing = rows.find(row =>
         row.material === material &&
         row.sheet_size === size &&
-        (row.gauge === gauge || (gaugeNumber && (
-          row.gauge === `${gaugeNumber} Gauge` ||
-          String(row.gauge).includes(gaugeNumber)
-        )))
+        (row.gauge === gauge || (
+          getStockGaugeNumber(gauge) !== '' &&
+          getStockGaugeNumber(row.gauge) === getStockGaugeNumber(gauge)
+        ))
       );
       if (existing) {
         existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + direction * sheetsNeeded);
@@ -875,7 +876,9 @@ function addQueuedChanges(url, response) {
         const aliases = { 'MS-BLACK': 'MS-CNC', 'SS-SILVER': 'SS-CNC', 'SS-GOLDEN': 'SG-CNC' };
         result.usage_detail.push({
           material: aliases[reportMaterial] || reportMaterial || rawMaterial,
-          gauge: frame.cnc_gauge || frame.gauge || '',
+          gauge: frame.bill_category === 'pipe_grill'
+            ? frame.pipe_gauge || frame.gauge || ''
+            : frame.cnc_gauge || frame.gauge || '',
           sheet_size: frame.sheet_size || '',
           bill_category: frame.bill_category || '',
           area: Number(frame.area) || 0,
@@ -1104,8 +1107,27 @@ export const CNC_PIPE_MATERIALS = [
   'SS(Pipe)-MS-CNC',
   'SS(Pipe)-SG-CNC',
 ];
-export const CNC_GAUGES = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30];
-export const PIPE_GAUGES = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30];
+export const CNC_GAUGES = Array.from({ length: 30 }, (_, index) => index + 1);
+export const PIPE_GAUGES = CNC_GAUGES;
+
+export function getFrameGaugeLabel(frame, compact = false) {
+  const cncGauge = String(frame.cnc_gauge || frame.gauge || '');
+  const pipeGauge = String(frame.pipe_gauge || '');
+  if (frame.bill_category === 'pipe_grill') return pipeGauge || String(frame.gauge || '');
+  if (frame.bill_category === 'cnc_pipe' && pipeGauge) {
+    return compact
+      ? `CNC ${cncGauge.replace(/ Gauge/gi, '')} / P ${pipeGauge.replace(/ Gauge/gi, '')}`
+      : `CNC ${cncGauge} / Pipe ${pipeGauge}`;
+  }
+  if (['fancy', 'bending_only', 'sheet_sale', 'only_cutting'].includes(frame.bill_category)) {
+    return String(frame.gauge || cncGauge);
+  }
+  return cncGauge;
+}
+
+function getStockGaugeNumber(value) {
+  return String(value || '').replace(/[^0-9]/g, '');
+}
 
 async function request(url, opts = {}) {
   const method = (opts.method || 'GET').toUpperCase();
