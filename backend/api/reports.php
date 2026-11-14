@@ -167,9 +167,13 @@ try {
             }
         }
 
-        $gauge = $row['bill_category'] === 'pipe_grill'
-            ? ($row['pipe_gauge'] ?: $row['gauge'] ?: '')
-            : ($row['cnc_gauge'] ?: $row['gauge'] ?: '');
+        if ($row['bill_category'] === 'pipe_grill') {
+            $gauge = $row['pipe_gauge'] ?: $row['gauge'] ?: '';
+        } elseif (in_array($row['bill_category'], ['cnc_only', 'cnc_pipe'], true)) {
+            $gauge = $row['cnc_gauge'] ?: $row['gauge'] ?: '';
+        } else {
+            $gauge = $row['gauge'] ?: $row['cnc_gauge'] ?: '';
+        }
         $size = $row['sheet_size'] ?: '';
         $pcs = max(1, (int)$row['pcs']);
         $lineTotal = (float)($row['total'] ?? 0);
