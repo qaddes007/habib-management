@@ -206,12 +206,12 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
         {[
           ['cnc_only', 'CNC Only'],
           ['cnc_pipe', 'CNC + Pipe'],
-          ['fancy', 'Fancy / Sheets'],
+          ['fancy', 'Fancy Articles'],
           ['sheet_sale', 'Complete Sheets'],
           ['only_cutting', 'Only Cutting'],
           ['pipe_grill', 'Pipe Grill'],
-          ['bending_sheet', 'Bending + Sheet'],
-          ['bending_only', 'Only Bending'],
+          ['bending_sheet', 'Bending'],
+          ['bending_only', 'Sheets'],
         ].map(([c, label]) => (
           <button key={c} type="button" className={'cat-tab' + (cat === c ? ' active' : '')}
             onClick={() => setCat(c)}>
@@ -301,10 +301,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
               <label>Gauge</label>
               <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
             </div>
-            <div className="form-group">
-              <label>Sheet Size</label>
-              <SheetSelect value={frame.sheet_size} onChange={v => set('sheet_size', v)} />
-            </div>
+
             <div className="form-group">
               <label>Total Price (PKR)</label>
               <input type="number" value={frame.direct_price} onChange={e => set('direct_price', e.target.value)} min="0" step="0.01" />
@@ -404,7 +401,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
         {/* ===== CNC + PIPE ===== */}
         {cat === 'cnc_pipe' && (
           <>
-            {/* Tag checkboxes — Frame Pipe / Gola / Master + Color / Fitting same row */}
+            {/* Tag checkboxes â€” Frame Pipe / Gola / Master + Color / Fitting same row */}
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Tags / Options</label>
               <div style={{
@@ -519,59 +516,20 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
               <input type="number" value={frame.extra_item_price} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
             </div>
 
-            {/* Frame Pipe / Gola / Master details — same row */}
-            {(frame.tag_frame_pipe || frame.tag_gola || frame.tag_master) && (
+            {frame.tag_master && (
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: 10,
-                }}>
-                  {frame.tag_frame_pipe && (
-                    <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Frame Pipe</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label>Pipe Gauge</label>
-                          <GaugeSelect value={frame.pipe_tag_gauge} list={PIPE_GAUGES} onChange={v => set('pipe_tag_gauge', v)} />
-                        </div>
-                        <div className="form-group">
-                          <label>Pipe Size (in)</label>
-                          <input value={frame.pipe_tag_size} onChange={e => set('pipe_tag_size', e.target.value)} placeholder="e.g. 1.5" />
-                        </div>
-                      </div>
+                <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Master</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div className="form-group">
+                      <label>Master Gauge</label>
+                      <GaugeSelect value={frame.master_tag_gauge} list={PIPE_GAUGES} onChange={v => set('master_tag_gauge', v)} />
                     </div>
-                  )}
-                  {frame.tag_gola && (
-                    <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Gola</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label>Gola Gauge</label>
-                          <GaugeSelect value={frame.gola_tag_gauge} list={PIPE_GAUGES} onChange={v => set('gola_tag_gauge', v)} />
-                        </div>
-                        <div className="form-group">
-                          <label>Gola Size (in)</label>
-                          <input value={frame.gola_tag_size} onChange={e => set('gola_tag_size', e.target.value)} placeholder="e.g. 1" />
-                        </div>
-                      </div>
+                    <div className="form-group">
+                      <label>Master Size (in)</label>
+                      <input value={frame.master_tag_size} onChange={e => set('master_tag_size', e.target.value)} placeholder="e.g. 2" />
                     </div>
-                  )}
-                  {frame.tag_master && (
-                    <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Master</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label>Master Gauge</label>
-                          <GaugeSelect value={frame.master_tag_gauge} list={PIPE_GAUGES} onChange={v => set('master_tag_gauge', v)} />
-                        </div>
-                        <div className="form-group">
-                          <label>Master Size (in)</label>
-                          <input value={frame.master_tag_size} onChange={e => set('master_tag_size', e.target.value)} placeholder="e.g. 2" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
             )}
@@ -595,31 +553,9 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
               <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => { set('gauge', v); set('cnc_gauge', v) }} />
             </div>
             <div className="form-group">
-              <label>Sheet Size</label>
-              <SheetSelect value={frame.sheet_size} onChange={v => set('sheet_size', v)} />
-            </div>
-            <div className="form-group">
-              <label>Pcs</label>
-              <input type="number" value={frame.pcs} onChange={e => set('pcs', e.target.value)} min="1" />
-            </div>
-            <div className="form-group">
-              <label>W (ft)</label>
-              <input type="number" value={frame.width} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
-            </div>
-            <div className="form-group">
-              <label>L (ft)</label>
-              <input type="number" value={frame.length} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
-            </div>
-            <div className="form-group">
               <label>Rate (per sq ft)</label>
               <input type="number" value={frame.rate} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
             </div>
-            <div className="form-group">
-              <label>Total Sq Ft</label>
-              <input type="text" readOnly
-                value={((parseFloat(frame.width)||0)*(parseFloat(frame.length)||0)*Math.max(1,parseInt(frame.pcs)||1)).toFixed(2)}
-                style={{ opacity: 0.85 }} />
-              </div>
             <div className="form-group">
               <label>Rate per Bend</label>
               <input type="number" value={frame.bend_rate} onChange={e => set('bend_rate', e.target.value)} min="0" step="0.01" />
@@ -742,7 +678,7 @@ export default function NewBill({ toast }) {
   const navigate = useNavigate()
   const { id: editId } = useParams()
   const isEdit = !!editId
-  const [srNo, setSrNo] = useState('…')
+  const [srNo, setSrNo] = useState('â€¦')
   const [billId, setBillId] = useState(null)
   const [locked, setLocked] = useState(false)
   const [clientName, setClientName] = useState('')
@@ -774,7 +710,7 @@ export default function NewBill({ toast }) {
         }
         if (isLocked(b)) {
           setLocked(true)
-          toast('This bill is PAID and older than 30 days — locked (print only)', true)
+          toast('This bill is PAID and older than 30 days â€” locked (print only)', true)
         }
         setBillId(b.id)
         setSrNo(b.sr_no)
@@ -922,7 +858,7 @@ export default function NewBill({ toast }) {
         }),
         personal_expenses: [],
       }
-      if (locked) { toast('Bill is locked — cannot edit', true); return }
+      if (locked) { toast('Bill is locked â€” cannot edit', true); return }
       if (isEdit && billId) {
         payload.id = billId
         const res = await api.updateBill(payload)
@@ -944,13 +880,13 @@ export default function NewBill({ toast }) {
     }
   }
 
-  if (loadingEdit) return <div className="loading">Loading bill…</div>
+  if (loadingEdit) return <div className="loading">Loading billâ€¦</div>
 
   return (
     <div className="container">
       <div className="page-title">
-        <span>{isEdit ? 'Edit Bill' : 'Create New Bill'} — SR# <span className="text-gold">{srNo}</span>
-          {locked && <span style={{marginLeft:12,fontSize:'0.85rem',color:'#dc2626'}}>🔒 Locked (PAID + 30 days)</span>}
+        <span>{isEdit ? 'Edit Bill' : 'Create New Bill'} â€” SR# <span className="text-gold">{srNo}</span>
+          {locked && <span style={{marginLeft:12,fontSize:'0.85rem',color:'#dc2626'}}>ðŸ”’ Locked (PAID + 30 days)</span>}
         </span>
       </div>
 
@@ -967,17 +903,6 @@ export default function NewBill({ toast }) {
           <div className="form-group">
             <label>Discount (PKR)</label>
             <input type="number" value={discount} onChange={e => setDiscount(e.target.value)} min="0" step="0.01" />
-          </div>
-          <div className="form-group bill-payment-group">
-            <label>Paid Amount (PKR)</label>
-            <input type="number" value={paid} onChange={e => setPaid(e.target.value)} min="0" step="0.01" />
-          </div>
-          <div className="form-group bill-save-group">
-            <label>&nbsp;</label>
-            <button type="button" className="btn btn-primary" onClick={save} disabled={saving || locked}
-              style={{ fontSize: '1rem', padding: '12px 22px', width: '100%' }}>
-              {saving ? 'Saving…' : (isEdit ? 'Update Bill' : 'Save Bill')}
-            </button>
           </div>
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
             <label>Notes</label>
@@ -1025,6 +950,19 @@ export default function NewBill({ toast }) {
         />
       ))}
 
+      <div className="bill-actions-row">
+        <div className="form-group bill-payment-group">
+          <label>Paid Amount (PKR)</label>
+          <input type="number" value={paid} onChange={e => setPaid(e.target.value)} min="0" step="0.01" />
+        </div>
+        <div className="form-group bill-save-group">
+          <label>&nbsp;</label>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={saving || locked}
+            style={{ fontSize: '1rem', padding: '12px 22px', width: '100%' }}>
+            {saving ? 'Saving…' : (isEdit ? 'Update Bill' : 'Save Bill')}
+          </button>
+        </div>
+      </div>
       <div className="grand-bar bill-grand-bar">
         <div className="gt-item"><div className="gt-label">Grand Total</div><div className="gt-value">{fmt(grand)}</div></div>
         <div className="gt-item"><div className="gt-label">Weight</div><div className="gt-value" style={{ color: '#7c3aed' }}>{totalWeight.toFixed(2)} Kg</div></div>
