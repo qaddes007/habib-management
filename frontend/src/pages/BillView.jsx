@@ -167,6 +167,7 @@ export default function BillView({ toast }) {
               const bendTotal = bendRate * bendCount
               const isFancy = f.bill_category === 'fancy'
               const isBendOnly = f.bill_category === 'bending_only'
+              const isBending = f.bill_category === 'bending_sheet'
               const isSheetSale = f.bill_category === 'sheet_sale'
               const isOnlyCutting = f.bill_category === 'only_cutting'
               return (
@@ -189,13 +190,15 @@ export default function BillView({ toast }) {
                   <td>
                     {isFancy
                       ? `${Number(f.area || f.width || 0).toFixed(2)} sqft`
-                      : (isBendOnly || isSheetSale || isOnlyCutting)
+                      : isBending
+                        ? '—'
+                        : (isBendOnly || isSheetSale || isOnlyCutting)
                         ? `${f.sheet_size || '4x8'} sheet`
                         : `${Number(f.width || 0).toFixed(2)} × ${Number(f.length || 0).toFixed(2)} ft`}
                   </td>
-                  <td>{isBendOnly ? `${Number(f.bend_count || 0).toFixed(2)} Kg` : isFancy ? `${Number(f.area || f.width || 0).toFixed(2)} sqft` : isOnlyCutting ? '—' : isSheetSale ? `${f.pcs} sheets` : f.pcs}</td>
-                  <td>{isFancy ? `${Number(f.rate || 0).toFixed(2)} / sqft` : isBendOnly ? `${Number(f.bend_rate || 0).toFixed(2)} / Kg` : isSheetSale ? `${Number(f.direct_price || 0).toFixed(2)} / sheet` : isOnlyCutting ? '—' : Number(f.rate || 0).toFixed(2)}</td>
-                  <td>{isOnlyCutting || isSheetSale ? '—' : `${Number(f.area || (isFancy ? f.width : 0) || 0).toFixed(2)} sqft`}</td>
+                  <td>{isBendOnly ? `${Number(f.bend_count || 0).toFixed(2)} Kg` : isFancy ? `${Number(f.area || f.width || 0).toFixed(2)} sqft` : isOnlyCutting ? f.pcs : isSheetSale ? `${f.pcs} sheets` : f.pcs}</td>
+                  <td>{isFancy ? `${Number(f.rate || 0).toFixed(2)} / sqft` : isBendOnly ? `${Number(f.bend_rate || 0).toFixed(2)} / Kg` : isBending ? `${Number(f.bend_rate || 0).toFixed(2)} / bend` : isSheetSale ? `${Number(f.direct_price || 0).toFixed(2)} / sheet` : isOnlyCutting ? '—' : Number(f.rate || 0).toFixed(2)}</td>
+                  <td>{isOnlyCutting || isSheetSale || isBending ? '—' : `${Number(f.area || (isFancy ? f.width : 0) || 0).toFixed(2)} sqft`}</td>
                   <td>
                     {bendTotal > 0
                       ? <span title={`${bendCount} × ${bendRate}`}>{Number(bendTotal).toFixed(2)}</span>

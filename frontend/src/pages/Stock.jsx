@@ -21,6 +21,7 @@ export default function Stock({ toast }) {
   const [usagePeriod, setUsagePeriod] = useState('all')
   const [report, setReport] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [editingStockId, setEditingStockId] = useState(null)
   const [filterMat, setFilterMat] = useState('')
   const [filterGauge, setFilterGauge] = useState('')
   const [loading, setLoading] = useState(true)
@@ -53,19 +54,39 @@ export default function Stock({ toast }) {
 
   const saveStock = async () => {
     const qty = parseFloat(form.quantity) || 0
-    if (qty <= 0) { toast('Quantity required', true); return }
+    if (qty < 0 || (!editingStockId && qty === 0)) { toast('Enter a valid quantity', true); return }
     try {
       const result = await api.saveStock({
+        ...(editingStockId !== null ? { id: editingStockId } : {}),
         material: form.material,
         gauge: form.gauge.includes('Gauge') ? form.gauge : form.gauge + ' Gauge',
         sheet_size: form.sheet_size,
         quantity: qty,
         kg_per_sheet: parseFloat(form.kg_per_sheet) || 0,
       })
-      toast(result.pending ? 'Stock saved on this laptop; it will sync later.' : 'Stock saved')
+      toast(result.pending
+        ? 'Stock saved on this laptop; it will sync later.'
+        : editingStockId !== null ? 'Stock updated' : 'Stock saved')
       setForm(emptyForm)
+      setEditingStockId(null)
       loadStock()
     } catch (e) { toast(e.message, true) }
+  }
+
+  const editStock = (stock) => {
+    setEditingStockId(stock.id)
+    setForm({
+      material: stock.material,
+      sheet_size: stock.sheet_size,
+      gauge: stock.gauge,
+      quantity: stock.quantity,
+      kg_per_sheet: stock.kg_per_sheet || '',
+    })
+  }
+
+  const cancelStockEdit = () => {
+    setEditingStockId(null)
+    setForm(emptyForm)
   }
 
   const adjust = async (id) => {
@@ -284,7 +305,7 @@ export default function Stock({ toast }) {
         <>
           <div className="card">
             <div className="card-header">
-              <h3 style={{ color: '#ea580c' }}>+ Add New Sheets to Stock</h3>
+              <h3 style={{ color: '#ea580c' }}>{editingStockId !== null ? 'Edit Stock Entry' : '+ Add New Sheets to Stock'}</h3>
             </div>
             <div className="form-grid" style={{ alignItems: 'end' }}>
               <div className="form-group">
@@ -315,7 +336,14 @@ export default function Stock({ toast }) {
                 <input type="number" value={form.kg_per_sheet} min="0" step="0.01"
                   onChange={e => setForm({ ...form, kg_per_sheet: e.target.value })} />
               </div>
-              <button className="btn btn-green" onClick={saveStock}>Save Stock</button>
+              <div className="btn-group">
+                <button className="btn btn-green" onClick={saveStock}>
+                  {editingStockId !== null ? 'Update Stock' : 'Save Stock'}
+                </button>
+                {editingStockId !== null && (
+                  <button className="btn btn-orange" onClick={cancelStockEdit}>Cancel</button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -348,6 +376,7 @@ export default function Stock({ toast }) {
                         <td>{fmtNum(qty * kg)}</td>
                         <td>{fmtNum(qty * area)}</td>
                         <td className="btn-group">
+                          <button className="btn btn-blue btn-sm" onClick={() => editStock(s)}>Edit</button>
                           <button className="btn btn-orange btn-sm" onClick={() => adjust(s.id)} disabled={s.pending}>± Adjust</button>
                           <button className="btn btn-red btn-sm" onClick={() => deleteStock(s.id, s.material + ' ' + s.gauge + ' ' + s.sheet_size)}>Delete</button>
                         </td>

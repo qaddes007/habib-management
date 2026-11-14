@@ -71,9 +71,20 @@ try {
                 ensureDataChangeCounterTable($db);
                 $db->beginTransaction();
                 if ($id > 0) {
-                    // Explicit row edit — set absolute quantity
+                    $current = $db->prepare('SELECT quantity FROM sheet_stock WHERE id=? FOR UPDATE');
+                    $current->execute([$id]);
+                    $previous = $current->fetch();
+                    if (!$previous) {
+                        $db->rollBack();
+                        jsonResponse(['error' => 'Not found'], 404);
+                    }
                     $db->prepare('UPDATE sheet_stock SET material=?, gauge=?, sheet_size=?, quantity=?, kg_per_sheet=?, notes=? WHERE id=?')
                        ->execute([$mat, $gauge, $size, $qty, $kg, $notes, $id]);
+                    $quantityChange = $qty - (float)$previous['quantity'];
+                    if ($quantityChange !== 0.0) {
+                        $db->prepare('INSERT INTO stock_log (stock_id, bill_id, change_qty, reason, offline_mutation_id) VALUES (?,?,?,?,?)')
+                           ->execute([$id, null, $quantityChange, 'Stock edit', $mutationId]);
+                    }
                 } else {
                     // Same material + gauge + size → ADD to existing qty (not replace)
                     $stmt = $db->prepare('SELECT id, quantity FROM sheet_stock WHERE material=? AND gauge=? AND sheet_size=? FOR UPDATE');
