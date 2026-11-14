@@ -1,4 +1,4 @@
-:root {
+successfully downloaded text file (SHA: 45e35ee91ad1110775dfb215286096f82522587b):root {
   --bg: #000B18;
   --bg-soft: #003d4d;
   --card-bg: #002233;
@@ -227,6 +227,20 @@ a:hover { color: var(--text-orange); }
 .bill-save-group {
   min-width: 180px;
 }
+.bill-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.bill-actions-row .bill-payment-group {
+  width: 240px;
+}
+.bill-actions-row .bill-save-group {
+  width: 200px;
+}
 .stock-summary-card {
   background: rgba(3, 26, 35, 0.8);
 }
@@ -333,7 +347,7 @@ a:hover { color: var(--text-orange); }
   transition: all 0.65s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 3D Hover Lift & Scale — no brightness filter (keeps colors readable) */
+/* 3D Hover Lift & Scale â€” no brightness filter (keeps colors readable) */
 .btn:hover {
   transform: translateY(-4px) scale(1.04);
   filter: none;
@@ -345,7 +359,7 @@ a:hover { color: var(--text-orange); }
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* Primary & Orange Button — keep background dark so white text stays readable */
+/* Primary & Orange Button â€” keep background dark so white text stays readable */
 .btn-primary {
   background: linear-gradient(135deg, #ff7300 0%, #cc3a00 100%);
   color: #fff !important;
@@ -634,6 +648,10 @@ tr:hover td { background: rgba(249,115,22,0.06); }
   .container { padding: 14px; }
   .grid-2 { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr 1fr; }
+  .bill-actions-row .bill-payment-group,
+  .bill-actions-row .bill-save-group {
+    width: 100%;
+  }
 }
 
 /* ===== Dual-Shade Gradient Theme (#000B18 -> #00172D) ===== */
@@ -1054,9 +1072,11 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* ── Live Sync Pulse Animation ── */
+/* â”€â”€ Live Sync Pulse Animation â”€â”€ */
 @keyframes livePulse {
   0%   { opacity: 1;    transform: scale(1);    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.6); }
   50%  { opacity: 0.85; transform: scale(1.15); box-shadow: 0 0 0 5px rgba(45, 212, 191, 0);  }
   100% { opacity: 1;    transform: scale(1);    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0);    }
 }
+
+
