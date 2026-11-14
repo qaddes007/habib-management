@@ -1086,12 +1086,12 @@ export function fmtNum(n) {
 
 export const CAT_LABELS = {
   cnc_only: 'CNC Only',
-  bending_sheet: 'Bending + Sheet',
-  bending_only: 'Only Bending',
+  bending_sheet: 'Bending',
+  bending_only: 'Sheets',
   sheet_sale: 'Complete Sheets',
   only_cutting: 'Only Cutting',
   cnc_pipe: 'CNC + Pipe',
-  fancy: 'Fancy / Sheets',
+  fancy: 'Fancy Articles',
   pipe_grill: 'Pipe Grill',
 };
 
@@ -1158,8 +1158,8 @@ async function request(url, opts = {}) {
       throw new Error('Could not connect to the server. Previously loaded data from this computer is available offline; try again when the connection is restored.');
     }
     throw new Error(API_BASE === '/api'
-      ? 'API offline — start PHP server on port 8080 (php -S localhost:8080 router.php)'
-      : 'Shared server offline — check the host laptop, internet connection, and Tailscale.');
+      ? 'API offline â€” start PHP server on port 8080 (php -S localhost:8080 router.php)'
+      : 'Shared server offline â€” check the host laptop, internet connection, and Tailscale.');
   }
   if (isTransientHttpStatus(res.status)) {
     setApiOnline(false);
@@ -1178,8 +1178,8 @@ async function request(url, opts = {}) {
   const text = await res.text();
   if (!text || !text.trim()) {
     throw new Error(API_BASE === '/api'
-      ? 'Empty API response — check PHP server is running on port 8080 and MySQL is started'
-      : 'Shared server returned an empty response — check that the host app and Tailscale are running.');
+      ? 'Empty API response â€” check PHP server is running on port 8080 and MySQL is started'
+      : 'Shared server returned an empty response â€” check that the host app and Tailscale are running.');
   }
   let data;
   try {
@@ -1281,7 +1281,7 @@ export function shareWhatsApp(message, phone = '') {
     return;
   }
 
-  // 2) iOS / Desktop: api.whatsapp.com — choose "WhatsApp Business" when prompted
+  // 2) iOS / Desktop: api.whatsapp.com â€” choose "WhatsApp Business" when prompted
   //    whatsapp:// also works if Business is default handler
   if (isMobile) {
     const native = num
@@ -1297,7 +1297,7 @@ export function shareWhatsApp(message, phone = '') {
     return;
   }
 
-  // 3) Desktop: open api.whatsapp.com — use "Continue to WhatsApp Web" then Business Desktop if logged in there
+  // 3) Desktop: open api.whatsapp.com â€” use "Continue to WhatsApp Web" then Business Desktop if logged in there
   //    Prefer number so message lands on business chat
   const web = num
     ? 'https://api.whatsapp.com/send?phone=' + num + '&text=' + text
@@ -1306,7 +1306,7 @@ export function shareWhatsApp(message, phone = '') {
 }
 
 
-/** Draw multiline text card → PNG blob */
+/** Draw multiline text card â†’ PNG blob */
 export function textToImageBlob(title, lines, opts = {}) {
   const pad = 28
   const lineH = 22
@@ -1377,7 +1377,7 @@ export async function shareAsImage(title, lines, filename = 'habib-share.png') {
 
   const short =
     (title || 'S. HABIB') +
-    '\n📷 Image downloaded — attach it in WhatsApp Business (Gallery / Document).'
+    '\nðŸ“· Image downloaded â€” attach it in WhatsApp Business (Gallery / Document).'
   shareWhatsApp(short)
 }
 
@@ -1388,11 +1388,11 @@ export function formatBillWhatsApp(bill) {
     `*S. HABIB STEEL & LASER CRAFT*`,
     `Bill #${bill.sr_no}  |  ${String(bill.created_at || '').slice(0, 16)}`,
     `Client: ${bill.client_name}${bill.client_phone ? ' | ' + bill.client_phone : ''}`,
-    `Status: ${bill.payment_status || '—'}`,
+    `Status: ${bill.payment_status || 'â€”'}`,
     `------------------------`,
   ];
   frames.forEach((f, i) => {
-    const mat = f.material || f.cnc_material || '—';
+    const mat = f.material || f.cnc_material || 'â€”';
     const g = f.gauge || f.cnc_gauge || '';
     const bend = (parseFloat(f.bend_rate) || 0) * (parseFloat(f.bend_count) || 0);
     lines.push(
@@ -1408,3 +1408,5 @@ export function formatBillWhatsApp(bill) {
   lines.push(`\nThank you!`);
   return lines.join('\n');
 }
+
+
