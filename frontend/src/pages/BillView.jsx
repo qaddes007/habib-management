@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { api, fmt, CAT_LABELS, getFrameGaugeLabel, shareWhatsApp, formatBillWhatsApp, shareAsImage } from '../api/client'
+import { api, fmt, CAT_LABELS, getFrameGaugeLabel, shareBillAsImage } from '../api/client'
 import ThermalPrint from '../components/ThermalPrint'
 import { useAutoRefresh } from '../hooks/useLiveSync'
 
@@ -115,10 +115,13 @@ export default function BillView({ toast }) {
           )}
           <button className="btn btn-purple" onClick={() => setShowThermal(true)}>🧾 80mm Print</button>
           <button className="btn btn-wa"
-            onClick={() => {
-              const text = formatBillWhatsApp(bill)
-              shareAsImage('Bill #' + bill.sr_no + ' — ' + (bill.client_name || ''), text.split('\n'), 'habib-bill-' + bill.sr_no + '.png')
-                .catch(() => shareWhatsApp(text))
+            onClick={async () => {
+              try {
+                const result = await shareBillAsImage(bill, 'habib-bill-' + bill.sr_no + '.png')
+                if (result.downloaded) toast('Bill image downloaded. Attach the PNG in WhatsApp; no bill text was sent.')
+              } catch (e) {
+                toast(e.message, true)
+              }
             }}>📲 WA Business</button>
           <button className="btn btn-green" onClick={() => setShowPay(true)}>💰 Add Payment</button>
           <Link to="/bills" className="btn btn-ghost">← Back</Link>

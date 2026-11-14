@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { api, fmt, shareWhatsApp, formatBillWhatsApp, shareAsImage } from '../api/client'
+import { api, fmt, shareBillAsImage } from '../api/client'
 import PrintSelector from '../components/PrintSelector'
 import ThermalPrint from '../components/ThermalPrint'
 import { useAutoRefresh } from '../hooks/useLiveSync'
@@ -70,16 +70,11 @@ export default function Bills({ toast }) {
   const shareBillWA = async (id) => {
     try {
       const d = await api.getBill(id)
-      const text = formatBillWhatsApp(d.data)
       const sr = d.data?.sr_no || id
-      await shareAsImage('Bill #' + sr, text.split('\n'), 'habib-bill-' + sr + '.png')
+      const result = await shareBillAsImage(d.data, 'habib-bill-' + sr + '.png')
+      if (result.downloaded) toast('Bill image downloaded. Attach the PNG in WhatsApp; no bill text was sent.')
     } catch (e) {
-      try {
-        const d = await api.getBill(id)
-        shareWhatsApp(formatBillWhatsApp(d.data))
-      } catch (e2) {
-        toast(e.message || e2.message, true)
-      }
+      toast(e.message, true)
     }
   }
 

@@ -488,11 +488,29 @@ function normalizePendingStockMaterial(material) {
   return null;
 }
 
+function reportFrameGauge(frame) {
+  if (frame.bill_category === 'pipe_grill') return frame.pipe_gauge || frame.gauge || '';
+  if (['cnc_only', 'cnc_pipe'].includes(frame.bill_category)) return frame.cnc_gauge || frame.gauge || '';
+  return frame.gauge || frame.cnc_gauge || '';
+}
+
+function reportFrameArea(frame) {
+  const area = Number(frame.area) || 0;
+  const match = String(frame.sheet_size || '').match(/^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)$/i);
+  if (['bending_sheet', 'only_cutting'].includes(frame.bill_category) && match) {
+    return Number(match[1]) * Number(match[2]);
+  }
+  if (frame.bill_category === 'sheet_sale' && area === 0 && match) {
+    return Number(match[1]) * Number(match[2]) * Math.max(1, Number(frame.pcs) || 1);
+  }
+  return area;
+}
+
 function applyPendingStockChanges(rows, queue) {
   const adjustForBill = (bill, direction) => {
     if (!bill) return;
     for (const frame of bill.frames || []) {
-      if (!['cnc_only', 'cnc_pipe', 'bending_sheet', 'sheet_sale', 'only_cutting'].includes(frame.bill_category)) continue;
+      if (!['cnc_only', 'cnc_pipe', 'sheet_sale'].includes(frame.bill_category)) continue;
       const material = normalizePendingStockMaterial(frame.cnc_material || frame.material);
       if (!material) continue;
 
@@ -501,17 +519,16 @@ function applyPendingStockChanges(rows, queue) {
       const pieces = Math.max(1, Number.parseInt(frame.pcs, 10) || 1);
       const area = Number(frame.area) || width * length * pieces;
       const sheetArea = { '4x7': 28, '5x7': 35, '4x8': 32, '5x8': 40, '4x10': 40, '5x10': 50 }[frame.sheet_size || '4x8'] || 32;
-      const usesFullSheet = ['bending_sheet', 'only_cutting'].includes(frame.bill_category);
-      const sheetsNeeded = usesFullSheet
-        ? 1
-        : frame.bill_category === 'sheet_sale'
-          ? Math.max(0, Number(frame.pcs) || 0)
-          : (area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0);
+      const sheetsNeeded = frame.bill_category === 'sheet_sale'
+        ? Math.max(0, Number(frame.pcs) || 0)
+        : (area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0);
       if (sheetsNeeded <= 0) continue;
 
       const gauge = frame.bill_category === 'pipe_grill'
         ? frame.pipe_gauge || frame.gauge || ''
-        : frame.cnc_gauge || frame.gauge || '';
+        : frame.bill_category === 'sheet_sale'
+          ? frame.gauge || frame.cnc_gauge || ''
+          : frame.cnc_gauge || frame.gauge || '';
       const size = frame.sheet_size || '4x8';
       const existing = rows.find(row =>
         row.material === material &&
@@ -816,7 +833,7 @@ function addQueuedChanges(url, response) {
           .find(base => rawMaterial.toLowerCase() === base.toLowerCase() || rawMaterial.toLowerCase().endsWith(base.toLowerCase()));
         const aliases = { 'MS-BLACK': 'MS-CNC', 'SS-SILVER': 'SS-CNC', 'SS-GOLDEN': 'SG-CNC' };
         const material = aliases[reportMaterial] || reportMaterial || rawMaterial;
-        const gauge = frame.cnc_gauge || frame.gauge || '';
+        const gauge = reportFrameGauge(frame);
         const size = frame.sheet_size || '';
         if (sign > 0) {
           result.usage_detail.push({
@@ -824,7 +841,7 @@ function addQueuedChanges(url, response) {
             gauge,
             sheet_size: size,
             bill_category: categoryKey,
-            area: Number(frame.area) || 0,
+            area: reportFrameArea(frame),
             pcs: Number(frame.pcs) || 1,
             amount: Number(frame.total) || 0,
             sr_no: bill.sr_no,
@@ -843,7 +860,7 @@ function addQueuedChanges(url, response) {
           result.material_usage.push(usage);
         }
         if (usage) {
-          usage.total_area = (Number(usage.total_area) || 0) + sign * (Number(frame.area) || 0);
+          usage.total_area = (Number(usage.total_area) || 0) + sign * reportFrameArea(frame);
           usage.total_amount = (Number(usage.total_amount) || 0) + sign * (Number(frame.total) || 0);
           usage.items = (Number(usage.items) || 0) + sign * (Number(frame.pcs) || 1);
           const clients = String(usage.clients || '').split(', ').filter(Boolean);
@@ -904,12 +921,10 @@ function addQueuedChanges(url, response) {
         const aliases = { 'MS-BLACK': 'MS-CNC', 'SS-SILVER': 'SS-CNC', 'SS-GOLDEN': 'SG-CNC' };
         result.usage_detail.push({
           material: aliases[reportMaterial] || reportMaterial || rawMaterial,
-          gauge: frame.bill_category === 'pipe_grill'
-            ? frame.pipe_gauge || frame.gauge || ''
-            : frame.cnc_gauge || frame.gauge || '',
+          gauge: reportFrameGauge(frame),
           sheet_size: frame.sheet_size || '',
           bill_category: frame.bill_category || '',
-          area: Number(frame.area) || 0,
+          area: reportFrameArea(frame),
           pcs: Number(frame.pcs) || 1,
           amount: Number(frame.total) || 0,
           sr_no: bill.sr_no,
@@ -945,7 +960,7 @@ function addQueuedChanges(url, response) {
           .find(base => rawMaterial.toLowerCase() === base.toLowerCase() || rawMaterial.toLowerCase().endsWith(base.toLowerCase()));
         const aliases = { 'MS-BLACK': 'MS-CNC', 'SS-SILVER': 'SS-CNC', 'SS-GOLDEN': 'SG-CNC' };
         const material = aliases[reportMaterial] || reportMaterial || rawMaterial;
-        const gauge = frame.cnc_gauge || frame.gauge || '';
+        const gauge = reportFrameGauge(frame);
         const size = frame.sheet_size || '';
         result.material_usage = result.material_usage || [];
         let usage = result.material_usage.find(row =>
@@ -958,7 +973,7 @@ function addQueuedChanges(url, response) {
           usage = { material, gauge, sheet_size: size, bill_category: categoryKey, total_area: 0, total_amount: 0, items: 0, clients: '' };
           result.material_usage.push(usage);
         }
-        usage.total_area = (Number(usage.total_area) || 0) + (Number(frame.area) || 0);
+        usage.total_area = (Number(usage.total_area) || 0) + reportFrameArea(frame);
         usage.total_amount = (Number(usage.total_amount) || 0) + (Number(frame.total) || 0);
         usage.items = (Number(usage.items) || 0) + (Number(frame.pcs) || 1);
         if (bill.client_name && !String(usage.clients || '').split(', ').includes(bill.client_name)) {
@@ -1429,6 +1444,259 @@ export async function shareAsImage(title, lines, filename = 'habib-share.png') {
     (title || 'S. HABIB') +
     '\n📷 Image downloaded — attach it in WhatsApp Business (Gallery / Document).'
   shareWhatsApp(short)
+}
+
+export async function shareBillAsImage(bill, filename = `habib-bill-${bill?.sr_no || 'receipt'}.png`) {
+  if (!bill) throw new Error('Bill details are not available')
+
+  const width = 640
+  const padding = 28
+  const contentWidth = width - padding * 2
+  const measureCanvas = document.createElement('canvas')
+  const measureContext = measureCanvas.getContext('2d')
+  if (!measureContext) throw new Error('Could not create bill image')
+
+  const operations = []
+  let y = 28
+  const wrap = (text, font, maxWidth) => {
+    measureContext.font = font
+    const words = String(text || '').split(/\s+/).filter(Boolean)
+    if (!words.length) return ['']
+    const lines = []
+    let line = ''
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word
+      if (measureContext.measureText(candidate).width <= maxWidth) {
+        line = candidate
+      } else if (line) {
+        lines.push(line)
+        line = word
+      } else {
+        let part = ''
+        for (const character of word) {
+          if (part && measureContext.measureText(part + character).width > maxWidth) {
+            lines.push(part)
+            part = character
+          } else {
+            part += character
+          }
+        }
+        line = part
+      }
+    }
+    if (line) lines.push(line)
+    return lines
+  }
+  const addText = (text, { font = '16px Arial, sans-serif', color = '#111827', align = 'left', gap = 5, maxWidth = contentWidth } = {}) => {
+    const lines = wrap(text, font, maxWidth)
+    const lineHeight = Number(font.match(/\d+(?=px)/)?.[0] || 14) + 6
+    operations.push({ type: 'text', lines, font, color, align, y, lineHeight })
+    y += lines.length * lineHeight + gap
+  }
+  const addPair = (left, right, { font = '15px Arial, sans-serif', bold = false } = {}) => {
+    const pairFont = bold ? `bold ${font}` : font
+    const rightWidth = 160
+    const leftLines = wrap(left, pairFont, contentWidth - rightWidth - 8)
+    const rightLines = wrap(right, pairFont, rightWidth)
+    const lineHeight = Number(font.match(/\d+(?=px)/)?.[0] || 14) + 6
+    const lines = Math.max(leftLines.length, rightLines.length)
+    operations.push({ type: 'pair', leftLines, rightLines, font: pairFont, y, lineHeight, rightWidth })
+    y += lines * lineHeight + 4
+  }
+  const addDivider = () => {
+    operations.push({ type: 'divider', y })
+    y += 14
+  }
+  const addTableRow = (cells, header = false) => {
+    const columnWidths = [41, 152, 58, 82, 70, 76, 105]
+    const font = header ? 'bold 12px Arial, sans-serif' : '12px Arial, sans-serif'
+    const cellLines = cells.map((cell, index) => wrap(cell, font, columnWidths[index] - 6))
+    const lineHeight = 16
+    const height = Math.max(...cellLines.map(lines => lines.length)) * lineHeight + 8
+    operations.push({ type: 'table', cellLines, columnWidths, font, y, height, header })
+    y += height
+  }
+  const money = value => `PKR ${Number(value || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 })}`
+  const company = bill.company || {}
+
+  addText('S. HABIB STEEL & LASER CRAFT', {
+    font: 'bold 22px Arial, sans-serif',
+    color: '#f97316',
+    align: 'center',
+    gap: 2,
+  })
+  if (company.tagline) addText(company.tagline, { font: '14px Arial, sans-serif', align: 'center', gap: 2 })
+  if (company.phones) addText(company.phones, { font: '14px Arial, sans-serif', align: 'center', gap: 2 })
+  if (company.address) addText(company.address, { font: '13px Arial, sans-serif', align: 'center' })
+  addDivider()
+  addPair(`Bill #${bill.sr_no || '—'}`, String(bill.created_at || '').slice(0, 16))
+  addText(`Client: ${bill.client_name || '—'}${bill.client_phone ? `  |  ${bill.client_phone}` : ''}`, { font: 'bold 15px Arial, sans-serif' })
+  addText(`Status: ${bill.payment_status || 'UNPAID'}`, { font: '14px Arial, sans-serif' })
+  addDivider()
+
+  const frames = bill.frames || []
+  if (bill.offline_summary || !frames.length) {
+    addText('Item details unavailable', { font: '14px Arial, sans-serif', align: 'center' })
+  } else {
+    addTableRow(['#', 'MAT', 'G', 'SIZE', 'SQFT', 'RATE', 'TOTAL'], true)
+    frames.forEach((frame, index) => {
+      const material = frame.material || frame.cnc_material || '—'
+      const gauge = getFrameGaugeLabel(frame, true)
+      const category = CAT_LABELS[frame.bill_category] || frame.bill_category || ''
+      const isBendOnly = frame.bill_category === 'bending_only'
+      const isBending = frame.bill_category === 'bending_sheet'
+      const isFancy = frame.bill_category === 'fancy'
+      const isSheetSale = frame.bill_category === 'sheet_sale'
+      const isOnlyCutting = frame.bill_category === 'only_cutting'
+      const size = frame.bill_category === 'fancy'
+        ? `${Number(frame.area || frame.width || 0).toFixed(1)} sqft`
+        : isBendOnly
+          ? `${frame.sheet_size || '4x8'} / ${Number(frame.bend_count || 0).toFixed(1)}kg`
+          : isBending
+            ? '—'
+            : isSheetSale || isOnlyCutting
+              ? frame.sheet_size || '4x8'
+              : `${Number(frame.width || 0)}x${Number(frame.length || 0)}`
+      const labels = [material, category]
+      if (frame.bill_category === 'cnc_pipe') {
+        const color = frame.color_yes ? 'Color:Yes' : frame.color_no ? 'Color:No' : ''
+        const fitting = frame.fitting_yes ? 'Fitting:Yes' : frame.fitting_no ? 'Fitting:No' : ''
+        if (color || fitting) labels.push([color, fitting].filter(Boolean).join(' '))
+      }
+      let tags = Array.isArray(frame.tags) ? frame.tags : []
+      if (typeof frame.tags === 'string') {
+        try {
+          const parsed = JSON.parse(frame.tags)
+          tags = Array.isArray(parsed) ? parsed : []
+        } catch {
+          tags = frame.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+        }
+      }
+      if (tags.length) labels.push(tags.join(', '))
+      if (isOnlyCutting) labels.push(`Qty: ${Number(frame.pcs) || 1}`)
+      const area = isOnlyCutting || isSheetSale || isBending
+        ? '—'
+        : Number(frame.area || (isFancy ? frame.width : 0) || 0).toFixed(2)
+      const rate = isBendOnly
+        ? `${money(frame.bend_rate || 0)}/kg`
+        : isBending
+          ? `${money(frame.bend_rate || 0)}/bend`
+          : isFancy
+            ? `${money(frame.rate || 0)}/sf`
+            : isSheetSale
+              ? `${money(frame.direct_price || 0)}/sheet`
+              : isOnlyCutting
+                ? '—'
+                : money(frame.rate || frame.direct_price || 0)
+      addTableRow([
+        String(index + 1),
+        labels.filter(Boolean).join(' · '),
+        gauge || '—',
+        size,
+        area,
+        rate,
+        money(frame.total),
+      ])
+    })
+  }
+
+  const bendTotal = frames.reduce((sum, frame) => sum + (Number(frame.bend_rate) || 0) * (Number(frame.bend_count) || 0), 0)
+  if (bendTotal > 0) addPair('Bending Total', money(bendTotal))
+  addDivider()
+  addPair('Grand Total', money(bill.grand_total), { font: 'bold 18px Arial, sans-serif' })
+  addPair('Discount', money(bill.discount))
+  addPair('Paid', money(bill.paid_amount))
+  addPair('Due', money(bill.remaining_balance), { font: 'bold 17px Arial, sans-serif' })
+  addDivider()
+  addText('QUALITY • ACCURACY • RELIABILITY', { font: 'bold 13px Arial, sans-serif', align: 'center', gap: 3 })
+  addText('Developed by: ENGR. Usama Rehman · 03158323077', { font: '12px Arial, sans-serif', align: 'center', gap: 3 })
+  addText('*** Thank You ***', { font: 'bold 15px Arial, sans-serif', align: 'center', gap: 3 })
+  addText('Shop Location', { font: '12px Arial, sans-serif', align: 'center', gap: 2 })
+  addText('S. HABIB STEEL & LASER CRAFT', { font: '12px Arial, sans-serif', color: '#6b7280', align: 'center', gap: 0 })
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = Math.ceil(y + 24)
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Could not create bill image')
+  context.fillStyle = '#fff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = '#f97316'
+  context.fillRect(0, 0, canvas.width, 8)
+  context.textBaseline = 'top'
+  for (const operation of operations) {
+    if (operation.type === 'divider') {
+      context.strokeStyle = '#9ca3af'
+      context.setLineDash([6, 5])
+      context.beginPath()
+      context.moveTo(padding, operation.y + 5)
+      context.lineTo(width - padding, operation.y + 5)
+      context.stroke()
+      context.setLineDash([])
+      continue
+    }
+    if (operation.type === 'table') {
+      context.font = operation.font
+      context.fillStyle = '#111827'
+      let x = padding
+      operation.cellLines.forEach((lines, index) => {
+        const align = operation.header || index === 2 || index === 3 || index === 4 || index === 5
+          ? 'center'
+          : index === 6 ? 'right' : 'left'
+        context.textAlign = align
+        const cellX = align === 'center'
+          ? x + operation.columnWidths[index] / 2
+          : align === 'right'
+            ? x + operation.columnWidths[index] - 3
+            : x + 3
+        lines.forEach((line, lineIndex) => context.fillText(line, cellX, operation.y + 4 + lineIndex * 16))
+        x += operation.columnWidths[index]
+      })
+      context.strokeStyle = '#6b7280'
+      context.beginPath()
+      context.moveTo(padding, operation.y + operation.height)
+      context.lineTo(width - padding, operation.y + operation.height)
+      context.stroke()
+      continue
+    }
+    context.font = operation.font
+    if (operation.type === 'text') {
+      context.fillStyle = operation.color
+      context.textAlign = operation.align
+      const x = operation.align === 'center' ? width / 2 : padding
+      operation.lines.forEach((line, index) => context.fillText(line, x, operation.y + index * operation.lineHeight))
+      continue
+    }
+    context.fillStyle = '#111827'
+    context.textAlign = 'left'
+    operation.leftLines.forEach((line, index) => context.fillText(line, padding, operation.y + index * operation.lineHeight))
+    context.textAlign = 'right'
+    operation.rightLines.forEach((line, index) => context.fillText(line, width - padding, operation.y + index * operation.lineHeight))
+  }
+
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) throw new Error('Could not create bill image')
+  const file = new File([blob], filename, { type: 'image/png' })
+
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: `Bill #${bill.sr_no || ''}` })
+      return { shared: true }
+    } catch (error) {
+      if (error?.name === 'AbortError') return { cancelled: true }
+    }
+  }
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 4000)
+  shareWhatsApp('', bill.client_phone || '')
+  return { downloaded: true }
 }
 
 export function formatBillWhatsApp(bill) {
