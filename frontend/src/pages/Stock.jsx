@@ -438,7 +438,7 @@ export default function Stock({ toast }) {
                 <tbody>
                   {usageRows.length === 0 && (
                     <tr><td colSpan={9} className="empty-state">
-                      No matching records. Create a CNC Only / CNC+Pipe bill first.
+                      No matching records. Create a CNC, Bending, or Only Cutting bill first.
                     </td></tr>
                   )}
                   {usageRows.map((r, i) => (

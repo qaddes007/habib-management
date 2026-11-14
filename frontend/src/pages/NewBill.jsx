@@ -207,7 +207,6 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
           ['cnc_only', 'CNC Only'],
           ['cnc_pipe', 'CNC + Pipe'],
           ['fancy', 'Fancy Articles'],
-          ['sheet_sale', 'Complete Sheets'],
           ['only_cutting', 'Only Cutting'],
           ['pipe_grill', 'Pipe Grill'],
           ['bending_sheet', 'Bending'],
@@ -232,10 +231,6 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
                 customValue={frame.custom_material}
                 onCustomChange={v => set('custom_material', v)}
               />
-            </div>
-            <div className="form-group">
-              <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
             </div>
             <div className="form-group">
               <label>Gauge</label>
@@ -274,7 +269,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size</label>
@@ -299,7 +294,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
 
             <div className="form-group">
@@ -365,7 +360,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size</label>
@@ -481,7 +476,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>CNC Gauge</label>
-              <GaugeSelect value={frame.cnc_gauge || frame.gauge} list={CNC_GAUGES} onChange={v => { set('cnc_gauge', v); set('gauge', v) }} />
+              <GaugeSelect value={frame.cnc_gauge || frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, cnc_gauge: v, gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size Used</label>
@@ -550,7 +545,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => { set('gauge', v); set('cnc_gauge', v) }} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
               <label>Rate (per sq ft)</label>
@@ -646,7 +641,7 @@ function frameFromApi(f) {
     material: f.material || f.cnc_material || 'MS-CNC',
     gauge: normalizeGaugeString(f.gauge || f.cnc_gauge || '12 Gauge'),
     pipe_gauge: normalizeGaugeString(f.pipe_gauge || '12 Gauge'),
-    cnc_gauge: normalizeGaugeString(f.cnc_gauge || f.gauge || '12 Gauge'),
+    cnc_gauge: normalizeGaugeString(f.gauge || f.cnc_gauge || '12 Gauge'),
     width: f.width ?? '',
     length: f.length ?? '',
     rate: f.rate ?? '',
@@ -749,6 +744,14 @@ export default function NewBill({ toast }) {
     const material = frame.material || 'MS-CNC'
     const gauge = normalizeGaugeString(frame.gauge || frame.cnc_gauge || frame.pipe_gauge || '12 Gauge')
     const size = frame.sheet_size || '4x8'
+    if (['bending_sheet', 'only_cutting'].includes(frame.bill_category)) {
+      const matching = stockRows.find(entry =>
+        String(entry.material || '').trim() === String(material).trim() &&
+        normalizeGaugeString(entry.gauge || '12 Gauge') === gauge &&
+        String(entry.sheet_size || '4x8') === String(size)
+      )
+      return Number(matching?.kg_per_sheet) || 0
+    }
     const area = getFrameArea(frame)
     if (area <= 0) return 0
     const sheetArea = getSheetArea(size) || 32
@@ -769,15 +772,17 @@ export default function NewBill({ toast }) {
   }
 
   const getStockAvailability = (frame) => {
-    if (frame.bill_category === 'only_cutting') return null
     const material = frame.material === '+ Write Own' ? frame.custom_material : (frame.material || 'MS-CNC')
     const gauge = normalizeGaugeString(frame.gauge || frame.cnc_gauge || frame.pipe_gauge || '12 Gauge')
     const size = frame.sheet_size || '4x8'
     const area = getFrameArea(frame)
     const sheetArea = getSheetArea(size) || 32
-    const neededSheets = frame.bill_category === 'sheet_sale'
-      ? Math.max(0, Number(frame.pcs) || 0)
-      : (area > 0 ? area / sheetArea : 0)
+    const usesFullSheet = ['bending_sheet', 'only_cutting'].includes(frame.bill_category)
+    const neededSheets = usesFullSheet
+      ? 1
+      : frame.bill_category === 'sheet_sale'
+        ? Math.max(0, Number(frame.pcs) || 0)
+        : (area > 0 ? area / sheetArea : 0)
     const currentQty = stockRows
       .filter(entry => String(entry.material || '').trim() === String(material).trim())
       .filter(entry => normalizeGaugeString(entry.gauge || '12 Gauge') === gauge)
@@ -787,9 +792,13 @@ export default function NewBill({ toast }) {
       .filter(item => String((item.material === '+ Write Own' ? item.custom_material : item.material) || '').trim() === String(material).trim())
       .filter(item => normalizeGaugeString(item.gauge || item.cnc_gauge || item.pipe_gauge || '12 Gauge') === gauge)
       .filter(item => String(item.sheet_size || '4x8') === String(size))
-      .reduce((sum, item) => sum + (item.bill_category === 'sheet_sale'
-        ? Math.max(0, Number(item.pcs) || 0)
-        : getFrameArea(item) / sheetArea), 0)
+      .reduce((sum, item) => sum + (
+        ['bending_sheet', 'only_cutting'].includes(item.bill_category)
+          ? 1
+          : item.bill_category === 'sheet_sale'
+            ? Math.max(0, Number(item.pcs) || 0)
+            : getFrameArea(item) / sheetArea
+      ), 0)
     return {
       material,
       gauge,

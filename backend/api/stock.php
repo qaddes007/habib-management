@@ -26,10 +26,18 @@ try {
                 // Usage summary from bills
                 $stmt = $db->query("
                     SELECT bf.material, bf.cnc_material, bf.gauge, bf.cnc_gauge, bf.sheet_size,
-                           SUM(bf.area) as total_area, COUNT(*) as item_count
+                           SUM(CASE
+                               WHEN bf.bill_category IN ('bending_sheet','only_cutting')
+                                   THEN CAST(SUBSTRING_INDEX(LOWER(bf.sheet_size), 'x', 1) AS DECIMAL(10,2))
+                                       * CAST(SUBSTRING_INDEX(LOWER(bf.sheet_size), 'x', -1) AS DECIMAL(10,2))
+                               WHEN bf.bill_category = 'sheet_sale'
+                                   THEN CAST(SUBSTRING_INDEX(LOWER(bf.sheet_size), 'x', 1) AS DECIMAL(10,2))
+                                       * CAST(SUBSTRING_INDEX(LOWER(bf.sheet_size), 'x', -1) AS DECIMAL(10,2)) * bf.pcs
+                               ELSE bf.area
+                           END) as total_area, COUNT(*) as item_count
                     FROM bill_frames bf
                     JOIN bills b ON b.id = bf.bill_id
-                    WHERE bf.bill_category IN ('cnc_only','cnc_pipe')
+                    WHERE bf.bill_category IN ('cnc_only','cnc_pipe','bending_sheet','bending_only','sheet_sale','only_cutting')
                     GROUP BY bf.material, bf.cnc_material, bf.gauge, bf.cnc_gauge, bf.sheet_size
                 ");
                 jsonResponse(['success' => true, 'usage' => $stmt->fetchAll()]);

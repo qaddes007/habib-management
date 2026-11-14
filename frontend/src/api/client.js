@@ -477,7 +477,7 @@ function applyPendingStockChanges(rows, queue) {
   const adjustForBill = (bill, direction) => {
     if (!bill) return;
     for (const frame of bill.frames || []) {
-      if (!['cnc_only', 'cnc_pipe', 'bending_sheet'].includes(frame.bill_category)) continue;
+      if (!['cnc_only', 'cnc_pipe', 'bending_sheet', 'sheet_sale', 'only_cutting'].includes(frame.bill_category)) continue;
       const material = normalizePendingStockMaterial(frame.cnc_material || frame.material);
       if (!material) continue;
 
@@ -485,11 +485,16 @@ function applyPendingStockChanges(rows, queue) {
       const length = Number(frame.length) || 0;
       const pieces = Math.max(1, Number.parseInt(frame.pcs, 10) || 1);
       const area = Number(frame.area) || width * length * pieces;
-      const sheetArea = { '4x8': 32, '5x8': 40, '4x10': 40, '5x10': 50 }[frame.sheet_size || '4x8'] || 32;
-      const sheetsNeeded = area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0;
+      const sheetArea = { '4x7': 28, '5x7': 35, '4x8': 32, '5x8': 40, '4x10': 40, '5x10': 50 }[frame.sheet_size || '4x8'] || 32;
+      const usesFullSheet = ['bending_sheet', 'only_cutting'].includes(frame.bill_category);
+      const sheetsNeeded = usesFullSheet
+        ? 1
+        : frame.bill_category === 'sheet_sale'
+          ? Math.max(0, Number(frame.pcs) || 0)
+          : (area > 0 ? Math.round((area / sheetArea) * 100) / 100 : 0);
       if (sheetsNeeded <= 0) continue;
 
-      const gauge = frame.cnc_gauge || frame.gauge || '';
+      const gauge = frame.gauge || frame.cnc_gauge || '';
       const gaugeNumber = String(gauge).replace(/[^0-9]/g, '');
       const size = frame.sheet_size || '4x8';
       const existing = rows.find(row =>
@@ -1408,5 +1413,3 @@ export function formatBillWhatsApp(bill) {
   lines.push(`\nThank you!`);
   return lines.join('\n');
 }
-
-
