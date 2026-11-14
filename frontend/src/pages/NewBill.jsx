@@ -72,10 +72,7 @@ function calcFrameTotal(f) {
     return bendTotal + extra
   }
   if (f.bill_category === 'bending_sheet') {
-    const w = parseFloat(f.width) || 0
-    const l = parseFloat(f.length) || 0
-    const r = parseFloat(f.rate) || 0
-    return w * l * pcs * r + bendTotal + extra
+    return bendTotal + extra
   }
   const w = parseFloat(f.width) || 0
   const l = parseFloat(f.length) || 0
@@ -190,6 +187,9 @@ function MaterialSelect({ value, onChange, customValue, onCustomChange, extraOpt
 
 function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
   const set = (key, val) => onChange({ ...frame, [key]: val })
+  const clearZeroOnFocus = key => e => {
+    if (e.target.value !== '' && Number(e.target.value) === 0) set(key, '')
+  }
   const setCat = (cat) => {
     onChange({
       ...emptyFrame(cat),
@@ -206,12 +206,11 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
         {[
           ['cnc_only', 'CNC Only'],
           ['cnc_pipe', 'CNC + Pipe'],
-          ['fancy', 'Fancy / Sheets'],
-          ['sheet_sale', 'Complete Sheets'],
+          ['fancy', 'Fancy Articles'],
           ['only_cutting', 'Only Cutting'],
           ['pipe_grill', 'Pipe Grill'],
-          ['bending_sheet', 'Bending + Sheet'],
-          ['bending_only', 'Only Bending'],
+          ['bending_sheet', 'Bending'],
+          ['bending_only', 'Sheets'],
         ].map(([c, label]) => (
           <button key={c} type="button" className={'cat-tab' + (cat === c ? ' active' : '')}
             onClick={() => setCat(c)}>
@@ -247,11 +246,11 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Total Sq Ft</label>
-              <input type="number" value={frame.width} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.width} onFocus={clearZeroOnFocus('width')} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Rate per Sq Ft (PKR)</label>
-              <input type="number" value={frame.rate} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.rate} onFocus={clearZeroOnFocus('rate')} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
             </div>
             {frame.width && frame.rate && (
               <div className="form-group">
@@ -270,7 +269,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size</label>
@@ -278,11 +277,11 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Whole Sheets</label>
-              <input type="number" value={frame.pcs} onChange={e => set('pcs', e.target.value)} min="1" step="1" />
+              <input type="number" value={frame.pcs} onFocus={clearZeroOnFocus('pcs')} onChange={e => set('pcs', e.target.value)} min="1" step="1" />
             </div>
             <div className="form-group">
               <label>Price per Sheet (PKR)</label>
-              <input type="number" value={frame.direct_price} onChange={e => set('direct_price', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.direct_price} onFocus={clearZeroOnFocus('direct_price')} onChange={e => set('direct_price', e.target.value)} min="0" step="0.01" />
             </div>
           </>
         )}
@@ -295,15 +294,15 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
-              <label>Sheet Size</label>
-              <SheetSelect value={frame.sheet_size} onChange={v => set('sheet_size', v)} />
+              <label>Quantity (OC)</label>
+              <input type="number" value={frame.pcs} onFocus={clearZeroOnFocus('pcs')} onChange={e => set('pcs', e.target.value)} min="1" step="1" />
             </div>
             <div className="form-group">
               <label>Total Price (PKR)</label>
-              <input type="number" value={frame.direct_price} onChange={e => set('direct_price', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.direct_price} onFocus={clearZeroOnFocus('direct_price')} onChange={e => set('direct_price', e.target.value)} min="0" step="0.01" />
             </div>
           </>
         )}
@@ -325,19 +324,19 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Pcs</label>
-              <input type="number" value={frame.pcs} onChange={e => set('pcs', e.target.value)} min="1" />
+              <input type="number" value={frame.pcs} onFocus={clearZeroOnFocus('pcs')} onChange={e => set('pcs', e.target.value)} min="1" />
             </div>
             <div className="form-group">
               <label>W (ft)</label>
-              <input type="number" value={frame.width} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.width} onFocus={clearZeroOnFocus('width')} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>L (ft)</label>
-              <input type="number" value={frame.length} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.length} onFocus={clearZeroOnFocus('length')} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Rate</label>
-              <input type="number" value={frame.rate} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.rate} onFocus={clearZeroOnFocus('rate')} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Extra Item</label>
@@ -345,7 +344,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Price (PKR)</label>
-              <input type="number" value={frame.extra_item_price} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.extra_item_price} onFocus={clearZeroOnFocus('extra_item_price')} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
             </div>
           </>
         )}
@@ -364,7 +363,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Gauge</label>
-              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => set('gauge', v)} />
+              <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size</label>
@@ -372,19 +371,19 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>W (ft)</label>
-              <input type="number" value={frame.width} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.width} onFocus={clearZeroOnFocus('width')} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>L (ft)</label>
-              <input type="number" value={frame.length} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.length} onFocus={clearZeroOnFocus('length')} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Rate (per sq ft)</label>
-              <input type="number" value={frame.rate} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.rate} onFocus={clearZeroOnFocus('rate')} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Pcs</label>
-              <input type="number" value={frame.pcs} onChange={e => set('pcs', e.target.value)} min="1" />
+              <input type="number" value={frame.pcs} onFocus={clearZeroOnFocus('pcs')} onChange={e => set('pcs', e.target.value)} min="1" />
             </div>
             <div className="form-group">
               <label>Extra Item</label>
@@ -392,7 +391,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Price (PKR)</label>
-              <input type="number" value={frame.extra_item_price} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.extra_item_price} onFocus={clearZeroOnFocus('extra_item_price')} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
             </div>
           </>
         )}
@@ -480,7 +479,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>CNC Gauge</label>
-              <GaugeSelect value={frame.cnc_gauge || frame.gauge} list={CNC_GAUGES} onChange={v => { set('cnc_gauge', v); set('gauge', v) }} />
+              <GaugeSelect value={frame.cnc_gauge || frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, cnc_gauge: v, gauge: v })} />
             </div>
             <div className="form-group">
               <label>Sheet Size Used</label>
@@ -492,19 +491,19 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Pcs</label>
-              <input type="number" value={frame.pcs} onChange={e => set('pcs', e.target.value)} min="1" />
+              <input type="number" value={frame.pcs} onFocus={clearZeroOnFocus('pcs')} onChange={e => set('pcs', e.target.value)} min="1" />
             </div>
             <div className="form-group">
               <label>W (ft)</label>
-              <input type="number" value={frame.width} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.width} onFocus={clearZeroOnFocus('width')} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>L (ft)</label>
-              <input type="number" value={frame.length} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.length} onFocus={clearZeroOnFocus('length')} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Rate</label>
-              <input type="number" value={frame.rate} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.rate} onFocus={clearZeroOnFocus('rate')} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Extra Item</label>
@@ -512,62 +511,23 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Price (PKR)</label>
-              <input type="number" value={frame.extra_item_price} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.extra_item_price} onFocus={clearZeroOnFocus('extra_item_price')} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
             </div>
 
-            {/* Frame Pipe / Gola / Master details — same row */}
-            {(frame.tag_frame_pipe || frame.tag_gola || frame.tag_master) && (
+            {frame.tag_master && (
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: 10,
-                }}>
-                  {frame.tag_frame_pipe && (
-                    <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Frame Pipe</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label>Pipe Gauge</label>
-                          <GaugeSelect value={frame.pipe_tag_gauge} list={PIPE_GAUGES} onChange={v => set('pipe_tag_gauge', v)} />
-                        </div>
-                        <div className="form-group">
-                          <label>Pipe Size (in)</label>
-                          <input value={frame.pipe_tag_size} onChange={e => set('pipe_tag_size', e.target.value)} placeholder="e.g. 1.5" />
-                        </div>
-                      </div>
+                <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Master</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div className="form-group">
+                      <label>Master Gauge</label>
+                      <GaugeSelect value={frame.master_tag_gauge} list={PIPE_GAUGES} onChange={v => set('master_tag_gauge', v)} />
                     </div>
-                  )}
-                  {frame.tag_gola && (
-                    <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Gola</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label>Gola Gauge</label>
-                          <GaugeSelect value={frame.gola_tag_gauge} list={PIPE_GAUGES} onChange={v => set('gola_tag_gauge', v)} />
-                        </div>
-                        <div className="form-group">
-                          <label>Gola Size (in)</label>
-                          <input value={frame.gola_tag_size} onChange={e => set('gola_tag_size', e.target.value)} placeholder="e.g. 1" />
-                        </div>
-                      </div>
+                    <div className="form-group">
+                      <label>Master Size (in)</label>
+                      <input value={frame.master_tag_size} onChange={e => set('master_tag_size', e.target.value)} placeholder="e.g. 2" />
                     </div>
-                  )}
-                  {frame.tag_master && (
-                    <div style={{ background: 'var(--entry-bg)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <label style={{ color: 'var(--text-orange)', marginBottom: 6, display: 'block' }}>▸ Master</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label>Master Gauge</label>
-                          <GaugeSelect value={frame.master_tag_gauge} list={PIPE_GAUGES} onChange={v => set('master_tag_gauge', v)} />
-                        </div>
-                        <div className="form-group">
-                          <label>Master Size (in)</label>
-                          <input value={frame.master_tag_size} onChange={e => set('master_tag_size', e.target.value)} placeholder="e.g. 2" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
             )}
@@ -591,38 +551,12 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
               <GaugeSelect value={frame.gauge} list={CNC_GAUGES} onChange={v => onChange({ ...frame, gauge: v, cnc_gauge: v })} />
             </div>
             <div className="form-group">
-              <label>Sheet Size</label>
-              <SheetSelect value={frame.sheet_size} onChange={v => set('sheet_size', v)} />
-            </div>
-            <div className="form-group">
-              <label>Pcs</label>
-              <input type="number" value={frame.pcs} onChange={e => set('pcs', e.target.value)} min="1" />
-            </div>
-            <div className="form-group">
-              <label>W (ft)</label>
-              <input type="number" value={frame.width} onChange={e => set('width', e.target.value)} min="0" step="0.01" />
-            </div>
-            <div className="form-group">
-              <label>L (ft)</label>
-              <input type="number" value={frame.length} onChange={e => set('length', e.target.value)} min="0" step="0.01" />
-            </div>
-            <div className="form-group">
-              <label>Rate (per sq ft)</label>
-              <input type="number" value={frame.rate} onChange={e => set('rate', e.target.value)} min="0" step="0.01" />
-            </div>
-            <div className="form-group">
-              <label>Total Sq Ft</label>
-              <input type="text" readOnly
-                value={((parseFloat(frame.width)||0)*(parseFloat(frame.length)||0)*Math.max(1,parseInt(frame.pcs)||1)).toFixed(2)}
-                style={{ opacity: 0.85 }} />
-              </div>
-            <div className="form-group">
               <label>Rate per Bend</label>
-              <input type="number" value={frame.bend_rate} onChange={e => set('bend_rate', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.bend_rate} onFocus={clearZeroOnFocus('bend_rate')} onChange={e => set('bend_rate', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Total Bends</label>
-              <input type="number" value={frame.bend_count} onChange={e => set('bend_count', e.target.value)} min="0" step="1" />
+              <input type="number" value={frame.bend_count} onFocus={clearZeroOnFocus('bend_count')} onChange={e => set('bend_count', e.target.value)} min="0" step="1" />
             </div>
             <div className="form-group">
               <label>Bending Total</label>
@@ -636,7 +570,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Price (PKR)</label>
-              <input type="number" value={frame.extra_item_price} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.extra_item_price} onFocus={clearZeroOnFocus('extra_item_price')} onChange={e => set('extra_item_price', e.target.value)} min="0" step="0.01" />
             </div>
           </>
         )}
@@ -663,11 +597,11 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
             </div>
             <div className="form-group">
               <label>Total Kg Sold</label>
-              <input type="number" value={frame.bend_count} onChange={e => set('bend_count', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.bend_count} onFocus={clearZeroOnFocus('bend_count')} onChange={e => set('bend_count', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Rate per Kg (PKR)</label>
-              <input type="number" value={frame.bend_rate} onChange={e => set('bend_rate', e.target.value)} min="0" step="0.01" />
+              <input type="number" value={frame.bend_rate} onFocus={clearZeroOnFocus('bend_rate')} onChange={e => set('bend_rate', e.target.value)} min="0" step="0.01" />
             </div>
             <div className="form-group">
               <label>Square Feet</label>
@@ -706,7 +640,7 @@ function frameFromApi(f) {
     material: f.material || f.cnc_material || 'MS-CNC',
     gauge: normalizeGaugeString(f.gauge || f.cnc_gauge || '12 Gauge'),
     pipe_gauge: normalizeGaugeString(f.pipe_gauge || '12 Gauge'),
-    cnc_gauge: normalizeGaugeString(f.cnc_gauge || f.gauge || '12 Gauge'),
+    cnc_gauge: normalizeGaugeString(f.gauge || f.cnc_gauge || '12 Gauge'),
     width: f.width ?? '',
     length: f.length ?? '',
     rate: f.rate ?? '',
@@ -744,7 +678,7 @@ export default function NewBill({ toast }) {
   const [clientName, setClientName] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [discount, setDiscount] = useState(0)
-  const [paid, setPaid] = useState(0)
+  const [paid, setPaid] = useState('')
   const [notes, setNotes] = useState('')
   const [frames, setFrames] = useState([emptyFrame()])
   const [stockRows, setStockRows] = useState([])
@@ -777,7 +711,7 @@ export default function NewBill({ toast }) {
         setClientName(b.client_name || '')
         setClientPhone(b.client_phone || '')
         setDiscount(b.discount || 0)
-        setPaid(b.paid_amount || 0)
+        setPaid(b.paid_amount || '')
         setNotes(b.notes || '')
         const fl = (b.frames || []).map(frameFromApi)
         setFrames(fl.length ? fl : [emptyFrame()])
@@ -809,6 +743,14 @@ export default function NewBill({ toast }) {
     const material = frame.material || 'MS-CNC'
     const gauge = normalizeGaugeString(frame.gauge || frame.cnc_gauge || frame.pipe_gauge || '12 Gauge')
     const size = frame.sheet_size || '4x8'
+    if (['bending_sheet', 'only_cutting'].includes(frame.bill_category)) {
+      const matching = stockRows.find(entry =>
+        String(entry.material || '').trim() === String(material).trim() &&
+        normalizeGaugeString(entry.gauge || '12 Gauge') === gauge &&
+        String(entry.sheet_size || '4x8') === String(size)
+      )
+      return Number(matching?.kg_per_sheet) || 0
+    }
     const area = getFrameArea(frame)
     if (area <= 0) return 0
     const sheetArea = getSheetArea(size) || 32
@@ -829,15 +771,17 @@ export default function NewBill({ toast }) {
   }
 
   const getStockAvailability = (frame) => {
-    if (frame.bill_category === 'only_cutting') return null
     const material = frame.material === '+ Write Own' ? frame.custom_material : (frame.material || 'MS-CNC')
     const gauge = normalizeGaugeString(frame.gauge || frame.cnc_gauge || frame.pipe_gauge || '12 Gauge')
     const size = frame.sheet_size || '4x8'
     const area = getFrameArea(frame)
     const sheetArea = getSheetArea(size) || 32
-    const neededSheets = frame.bill_category === 'sheet_sale'
-      ? Math.max(0, Number(frame.pcs) || 0)
-      : (area > 0 ? area / sheetArea : 0)
+    const usesFullSheet = ['bending_sheet', 'only_cutting'].includes(frame.bill_category)
+    const neededSheets = usesFullSheet
+      ? 1
+      : frame.bill_category === 'sheet_sale'
+        ? Math.max(0, Number(frame.pcs) || 0)
+        : (area > 0 ? area / sheetArea : 0)
     const currentQty = stockRows
       .filter(entry => String(entry.material || '').trim() === String(material).trim())
       .filter(entry => normalizeGaugeString(entry.gauge || '12 Gauge') === gauge)
@@ -847,9 +791,13 @@ export default function NewBill({ toast }) {
       .filter(item => String((item.material === '+ Write Own' ? item.custom_material : item.material) || '').trim() === String(material).trim())
       .filter(item => normalizeGaugeString(item.gauge || item.cnc_gauge || item.pipe_gauge || '12 Gauge') === gauge)
       .filter(item => String(item.sheet_size || '4x8') === String(size))
-      .reduce((sum, item) => sum + (item.bill_category === 'sheet_sale'
-        ? Math.max(0, Number(item.pcs) || 0)
-        : getFrameArea(item) / sheetArea), 0)
+      .reduce((sum, item) => sum + (
+        ['bending_sheet', 'only_cutting'].includes(item.bill_category)
+          ? 1
+          : item.bill_category === 'sheet_sale'
+            ? Math.max(0, Number(item.pcs) || 0)
+            : getFrameArea(item) / sheetArea
+      ), 0)
     return {
       material,
       gauge,
@@ -962,18 +910,9 @@ export default function NewBill({ toast }) {
           </div>
           <div className="form-group">
             <label>Discount (PKR)</label>
-            <input type="number" value={discount} onChange={e => setDiscount(e.target.value)} min="0" step="0.01" />
-          </div>
-          <div className="form-group bill-payment-group">
-            <label>Paid Amount (PKR)</label>
-            <input type="number" value={paid} onChange={e => setPaid(e.target.value)} min="0" step="0.01" />
-          </div>
-          <div className="form-group bill-save-group">
-            <label>&nbsp;</label>
-            <button type="button" className="btn btn-primary" onClick={save} disabled={saving || locked}
-              style={{ fontSize: '1rem', padding: '12px 22px', width: '100%' }}>
-              {saving ? 'Saving…' : (isEdit ? 'Update Bill' : 'Save Bill')}
-            </button>
+            <input type="number" value={discount} onFocus={e => {
+              if (e.target.value !== '' && Number(e.target.value) === 0) setDiscount('')
+            }} onChange={e => setDiscount(e.target.value)} min="0" step="0.01" />
           </div>
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
             <label>Notes</label>
@@ -1021,6 +960,21 @@ export default function NewBill({ toast }) {
         />
       ))}
 
+      <div className="bill-actions-row">
+        <div className="form-group bill-payment-group">
+          <label>Paid Amount (PKR)</label>
+          <input type="number" value={paid} onFocus={e => {
+            if (e.target.value !== '' && Number(e.target.value) === 0) setPaid('')
+          }} onChange={e => setPaid(e.target.value)} min="0" step="0.01" />
+        </div>
+        <div className="form-group bill-save-group">
+          <label>&nbsp;</label>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={saving || locked}
+            style={{ fontSize: '1rem', padding: '12px 22px', width: '100%' }}>
+            {saving ? 'Saving…' : (isEdit ? 'Update Bill' : 'Save Bill')}
+          </button>
+        </div>
+      </div>
       <div className="grand-bar bill-grand-bar">
         <div className="gt-item"><div className="gt-label">Grand Total</div><div className="gt-value">{fmt(grand)}</div></div>
         <div className="gt-item"><div className="gt-label">Weight</div><div className="gt-value" style={{ color: '#7c3aed' }}>{totalWeight.toFixed(2)} Kg</div></div>

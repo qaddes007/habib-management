@@ -171,10 +171,7 @@ try {
                     } elseif ($cat === 'bending_only') {
                         $total = $bendTotal;
                     } elseif ($cat === 'bending_sheet') {
-                        $w = (float)($f['width'] ?? 0);
-                        $l = (float)($f['length'] ?? 0);
-                        $r = (float)($f['rate'] ?? 0);
-                        $total = $w * $l * $pcs * $r + $bendTotal;
+                        $total = $bendTotal;
                     } else {
                         $w = (float)($f['width'] ?? 0);
                         $l = (float)($f['length'] ?? 0);
@@ -281,7 +278,7 @@ try {
                         $total = $bendTotal + $extra;
                     } elseif ($cat === 'bending_sheet') {
                         $area = $w * $l * $pcs;
-                        $total = $area * $r + $bendTotal + $extra;
+                        $total = $bendTotal + $extra;
                     } else {
                         $area = $w * $l * $pcs;
                         $total = $area * $r + $extra;
@@ -448,26 +445,28 @@ function normalizeGaugeValue(?string $value): string {
 }
 
 function consumeStockForBill(PDO $db, int $billId): void {
-    $stmt = $db->prepare("SELECT * FROM bill_frames WHERE bill_id=? AND bill_category IN ('cnc_only','cnc_pipe','bending_sheet','bending_only','sheet_sale')");
+    $stmt = $db->prepare("SELECT * FROM bill_frames WHERE bill_id=? AND bill_category IN ('cnc_only','cnc_pipe','bending_sheet','bending_only','sheet_sale','only_cutting')");
     $stmt->execute([$billId]);
     $frames = $stmt->fetchAll();
 
     foreach ($frames as $f) {
         $isBendingOnly = $f['bill_category'] === 'bending_only';
         $isSheetSale = $f['bill_category'] === 'sheet_sale';
+        $usesFullSheet = in_array($f['bill_category'], ['bending_sheet', 'only_cutting'], true);
         $raw = ($isBendingOnly || $isSheetSale) ? $f['material'] : ($f['cnc_material'] ?: $f['material']);
         $mat = normalizeSheetMaterial((string)$raw);
         if (!$mat) continue; // skip pipe-only / unknown
 
-        $gauge = ($isBendingOnly || $isSheetSale)
-            ? normalizeGaugeValue($f['gauge'])
-            : normalizeGaugeValue($f['cnc_gauge'] ?: $f['gauge']);
+        $gauge = normalizeGaugeValue($f['gauge'] ?: $f['cnc_gauge']);
         $size = $f['sheet_size'] ?: '4x8';
         $area = (float)$f['area'];
-        $sheetArea = SHEET_AREAS[$size] ?? 32.0;
-        $sheetsNeeded = $isSheetSale
-            ? max(0, (float)$f['pcs'])
-            : ($area > 0 ? round($area / $sheetArea, 2) : 0);
+        $sheetAreas = ['4x7' => 28.0, '5x7' => 35.0, '4x8' => 32.0, '5x8' => 40.0, '4x10' => 40.0, '5x10' => 50.0];
+        $sheetArea = $sheetAreas[$size] ?? 32.0;
+        $sheetsNeeded = $usesFullSheet
+            ? 1
+            : ($isSheetSale
+                ? max(0, (float)$f['pcs'])
+                : ($area > 0 ? round($area / $sheetArea, 2) : 0));
 
         if ($sheetsNeeded <= 0) continue;
 
