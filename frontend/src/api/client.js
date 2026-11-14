@@ -490,7 +490,8 @@ function normalizePendingStockMaterial(material) {
 
 function reportFrameGauge(frame) {
   if (frame.bill_category === 'pipe_grill') return frame.pipe_gauge || frame.gauge || '';
-  if (['cnc_only', 'cnc_pipe'].includes(frame.bill_category)) return frame.cnc_gauge || frame.gauge || '';
+  if (frame.bill_category === 'cnc_only') return frame.gauge || frame.cnc_gauge || '';
+  if (frame.bill_category === 'cnc_pipe') return frame.cnc_gauge || frame.gauge || '';
   return frame.gauge || frame.cnc_gauge || '';
 }
 
@@ -528,7 +529,9 @@ function applyPendingStockChanges(rows, queue) {
         ? frame.pipe_gauge || frame.gauge || ''
         : frame.bill_category === 'sheet_sale'
           ? frame.gauge || frame.cnc_gauge || ''
-          : frame.cnc_gauge || frame.gauge || '';
+          : frame.bill_category === 'cnc_only'
+            ? frame.gauge || frame.cnc_gauge || ''
+            : frame.cnc_gauge || frame.gauge || '';
       const size = frame.sheet_size || '4x8';
       const existing = rows.find(row =>
         row.material === material &&
@@ -1157,6 +1160,7 @@ export function getFrameGaugeLabel(frame, compact = false) {
   const cncGauge = String(frame.cnc_gauge || frame.gauge || '');
   const pipeGauge = String(frame.pipe_gauge || '');
   if (frame.bill_category === 'pipe_grill') return pipeGauge || String(frame.gauge || '');
+  if (frame.bill_category === 'cnc_only') return String(frame.gauge || cncGauge);
   if (frame.bill_category === 'cnc_pipe' && pipeGauge) {
     return compact
       ? `CNC ${cncGauge.replace(/ Gauge/gi, '')} / P ${pipeGauge.replace(/ Gauge/gi, '')}`

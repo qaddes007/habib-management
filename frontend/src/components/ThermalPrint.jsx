@@ -107,7 +107,7 @@ export default function ThermalPrint({ bill, onClose }) {
       #thermal-text img[alt="qr"] { width: 68px; height: 68px; }
       #thermal-text img[alt="location"] {
         width: 100%;
-        max-height: 48mm;
+        max-height: 60mm;
         object-fit: contain;
         filter: grayscale(1) contrast(1.7) brightness(.9) !important;
       }
