@@ -1086,12 +1086,12 @@ export function fmtNum(n) {
 
 export const CAT_LABELS = {
   cnc_only: 'CNC Only',
-  bending_sheet: 'Bending + Sheet',
-  bending_only: 'Only Bending',
+  bending_sheet: 'Bending',
+  bending_only: 'Sheets',
   sheet_sale: 'Complete Sheets',
   only_cutting: 'Only Cutting',
   cnc_pipe: 'CNC + Pipe',
-  fancy: 'Fancy / Sheets',
+  fancy: 'Fancy Articles',
   pipe_grill: 'Pipe Grill',
 };
 
@@ -1408,3 +1408,5 @@ export function formatBillWhatsApp(bill) {
   lines.push(`\nThank you!`);
   return lines.join('\n');
 }
+
+

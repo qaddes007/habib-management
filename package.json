@@ -54,7 +54,7 @@
       "icon": "assets/app-icon.ico",
       "publish": {
         "provider": "github",
-        "owner": "qaddes007",
+        "owner": "usamarehman067-crypto",
         "repo": "habib-management",
         "releaseType": "release"
       }
