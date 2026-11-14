@@ -227,6 +227,20 @@ a:hover { color: var(--text-orange); }
 .bill-save-group {
   min-width: 180px;
 }
+.bill-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.bill-actions-row .bill-payment-group {
+  width: 240px;
+}
+.bill-actions-row .bill-save-group {
+  width: 200px;
+}
 .stock-summary-card {
   background: rgba(3, 26, 35, 0.8);
 }
@@ -634,6 +648,10 @@ tr:hover td { background: rgba(249,115,22,0.06); }
   .container { padding: 14px; }
   .grid-2 { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr 1fr; }
+  .bill-actions-row .bill-payment-group,
+  .bill-actions-row .bill-save-group {
+    width: 100%;
+  }
 }
 
 /* ===== Dual-Shade Gradient Theme (#000B18 -> #00172D) ===== */

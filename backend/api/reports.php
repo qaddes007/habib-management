@@ -171,10 +171,17 @@ try {
             ? ($row['pipe_gauge'] ?: $row['gauge'] ?: '')
             : ($row['cnc_gauge'] ?: $row['gauge'] ?: '');
         $size = $row['sheet_size'] ?: '';
-        $area = (float)$row['area'];
         $pcs = max(1, (int)$row['pcs']);
         $lineTotal = (float)($row['total'] ?? 0);
         $cat = $row['bill_category'] ?? '';
+        $area = (float)$row['area'];
+        if (in_array($cat, ['bending_sheet', 'only_cutting'], true)) {
+            if (preg_match('/^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)$/i', $size, $matches)) {
+                $area = (float)$matches[1] * (float)$matches[2];
+            }
+        } elseif ($cat === 'sheet_sale' && $area === 0.0 && preg_match('/^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)$/i', $size, $matches)) {
+            $area = (float)$matches[1] * (float)$matches[2] * $pcs;
+        }
 
         $key = $base . '|' . $gauge . '|' . $size . '|' . $cat;
         if (!isset($agg[$key])) {

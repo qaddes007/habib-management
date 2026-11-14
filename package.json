@@ -55,7 +55,7 @@
       "publish": {
         "provider": "github",
         "owner": "qaddes007",
-        "repo": "habib-management",
+        "repo": "habib-management-app",
         "releaseType": "release"
       }
     },

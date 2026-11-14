@@ -276,6 +276,7 @@ export default function ThermalPrint({ bill, onClose }) {
                 )}
                 {frames.map((f, i) => {
                   const isBendOnly = f.bill_category === 'bending_only'
+                  const isBending = f.bill_category === 'bending_sheet'
                   const gaugeLabel = getFrameGaugeLabel(f, true)
                   const gauge = gaugeLabel ? normalizeGaugeText(gaugeLabel).replace(/ Gauge/gi, '') : ''
                   const mat = (f.material || f.cnc_material || '—').slice(0, 14)
@@ -289,6 +290,8 @@ export default function ThermalPrint({ bill, onClose }) {
                     ? `${Number(f.area || f.width || 0).toFixed(1)} sqft`
                     : isBendOnly
                       ? `${f.sheet_size || '4x8'} / ${Number(f.bend_count || 0).toFixed(1)}kg`
+                      : isBending
+                        ? '—'
                       : (isSheetSale || isOnlyCutting) ? `${f.sheet_size || '4x8'}` : `${w}x${l}`
                   const colorFit = []
                   if (f.bill_category === 'cnc_pipe') {
@@ -307,6 +310,7 @@ export default function ThermalPrint({ bill, onClose }) {
                       <td style={{ fontSize: 8, padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb', lineHeight: 1.25 }}>
                         <div style={{ fontWeight: 'bold' }}>{mat}</div>
                         {catLabel ? <div style={{ fontSize: 7 }}>{catLabel}</div> : null}
+                        {isOnlyCutting ? <div style={{ fontSize: 7 }}>Qty: {Number(f.pcs) || 1}</div> : null}
                         {tags.length > 0 ? <div style={{ fontSize: 7 }}>{tags.join(', ')}</div> : null}
                         {colorFit.length > 0 ? <div style={{ fontSize: 7 }}>{colorFit.join(' ')}</div> : null}
                       </td>
@@ -317,10 +321,10 @@ export default function ThermalPrint({ bill, onClose }) {
                         {sizeStr}
                       </td>
                       <td style={{ fontSize: 9, textAlign: 'center', padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb' }}>
-                        {isOnlyCutting || isSheetSale ? '—' : Number(f.area || (isFancy ? f.width : 0) || 0).toFixed(2)}
+                        {isOnlyCutting || isSheetSale || isBending ? '—' : Number(f.area || (isFancy ? f.width : 0) || 0).toFixed(2)}
                       </td>
                       <td style={{ fontSize: 9, textAlign: 'center', padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb' }}>
-                        {isBendOnly ? `${money(f.bend_rate || 0)}/kg` : isFancy ? `${money(f.rate || 0)}/sf` : isSheetSale ? `${money(f.direct_price || 0)}/sheet` : isOnlyCutting ? '—' : money(f.rate || f.direct_price || 0)}
+                        {isBendOnly ? `${money(f.bend_rate || 0)}/kg` : isBending ? `${money(f.bend_rate || 0)}/bend` : isFancy ? `${money(f.rate || 0)}/sf` : isSheetSale ? `${money(f.direct_price || 0)}/sheet` : isOnlyCutting ? '—' : money(f.rate || f.direct_price || 0)}
                       </td>
                       <td style={{ fontSize: 9, textAlign: 'right', padding: '4px 1px', verticalAlign: 'top', borderBottom: '1px dotted #bbb', fontWeight: 'bold' }}>
                         {money(f.total)}
