@@ -17,7 +17,8 @@ function normalizeGaugeString(value) {
 
 function getStockGauge(frame) {
   if (frame.bill_category === 'pipe_grill') return frame.pipe_gauge || frame.gauge || '12 Gauge'
-  if (['cnc_only', 'cnc_pipe'].includes(frame.bill_category)) return frame.cnc_gauge || frame.gauge || '12 Gauge'
+  if (frame.bill_category === 'cnc_only') return frame.gauge || frame.cnc_gauge || '12 Gauge'
+  if (frame.bill_category === 'cnc_pipe') return frame.cnc_gauge || frame.gauge || '12 Gauge'
   return frame.gauge || frame.cnc_gauge || '12 Gauge'
 }
 
@@ -623,13 +624,16 @@ function isLocked(bill) {
 
 function frameFromApi(f) {
   const tags = typeof f.tags === 'string' ? JSON.parse(f.tags || '[]') : (f.tags || [])
+  const cncGauge = normalizeGaugeString(
+    f.bill_category === 'cnc_only' ? f.gauge || f.cnc_gauge : f.cnc_gauge || f.gauge
+  )
   return {
     _id: nextId++,
     bill_category: f.bill_category || 'cnc_only',
     material: f.material || f.cnc_material || 'MS-CNC',
     gauge: normalizeGaugeString(f.gauge || f.cnc_gauge || '12 Gauge'),
     pipe_gauge: normalizeGaugeString(f.pipe_gauge || '12 Gauge'),
-    cnc_gauge: normalizeGaugeString(f.cnc_gauge || f.gauge || '12 Gauge'),
+    cnc_gauge: cncGauge,
     width: f.width ?? '',
     length: f.length ?? '',
     rate: f.rate ?? '',
@@ -811,12 +815,15 @@ export default function NewBill({ toast }) {
           if (f.tag_frame_pipe) tags.push('Frame Pipe')
           if (f.tag_gola) tags.push('Gola')
           if (f.tag_master) tags.push('Master')
+          const cncGauge = normalizeGaugeString(
+            f.bill_category === 'cnc_only' ? f.gauge || f.cnc_gauge : f.cnc_gauge || f.gauge
+          )
           return {
             bill_category: f.bill_category,
             material: f.material === '+ Write Own' ? (f.custom_material || 'CUSTOM') : f.material,
             cnc_material: f.material,
-            gauge: normalizeGaugeString(f.gauge),
-            cnc_gauge: normalizeGaugeString(f.cnc_gauge || f.gauge),
+            gauge: f.bill_category === 'cnc_only' ? cncGauge : normalizeGaugeString(f.gauge),
+            cnc_gauge: cncGauge,
             pipe_gauge: normalizeGaugeString(f.pipe_gauge),
             width: f.bill_category === 'bending_only' ? getBendingArea(f, stockRows) : (parseFloat(f.width) || 0),
             length: f.bill_category === 'bending_only' ? 1 : (parseFloat(f.length) || 0),

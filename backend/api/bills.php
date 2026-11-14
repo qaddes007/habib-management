@@ -285,6 +285,10 @@ try {
                     }
 
                     $tags = json_encode($f['tags'] ?? []);
+                    $gauge = $f['gauge'] ?? '';
+                    $cncGauge = $cat === 'cnc_only'
+                        ? ($f['gauge'] ?? ($f['cnc_gauge'] ?? ''))
+                        : ($f['cnc_gauge'] ?? ($f['gauge'] ?? ''));
 
                     $stmt = $db->prepare('INSERT INTO bill_frames 
                         (bill_id, serial, bill_category, material, pipe_material, cnc_material, gauge, pipe_gauge, cnc_gauge,
@@ -296,7 +300,8 @@ try {
                     $stmt->execute([
                         $billId, $serial++, $cat,
                         $f['material'] ?? '', $f['pipe_material'] ?? '', $f['cnc_material'] ?? ($f['material'] ?? ''),
-                        $f['gauge'] ?? '', $f['pipe_gauge'] ?? '', $f['cnc_gauge'] ?? ($f['gauge'] ?? ''),
+                        $cat === 'cnc_only' ? $cncGauge : $gauge,
+                        $f['pipe_gauge'] ?? '', $cncGauge,
                         $pcs, $w, $l, $r, $dp, $area, $total,
                         $f['extra_item_name'] ?? '', $extra, $f['sheet_size'] ?? '4x8',
                         $tags,
@@ -456,9 +461,13 @@ function consumeStockForBill(PDO $db, int $billId): void {
         $mat = normalizeSheetMaterial((string)$raw);
         if (!$mat) continue; // skip pipe-only / unknown
 
-        $gaugeValue = in_array($f['bill_category'], ['cnc_only', 'cnc_pipe'], true)
-            ? ($f['cnc_gauge'] ?: $f['gauge'])
-            : ($f['gauge'] ?: $f['cnc_gauge']);
+        if ($f['bill_category'] === 'cnc_only') {
+            $gaugeValue = $f['gauge'] ?: $f['cnc_gauge'];
+        } elseif ($f['bill_category'] === 'cnc_pipe') {
+            $gaugeValue = $f['cnc_gauge'] ?: $f['gauge'];
+        } else {
+            $gaugeValue = $f['gauge'] ?: $f['cnc_gauge'];
+        }
         $gauge = normalizeGaugeValue($gaugeValue);
         $size = $f['sheet_size'] ?: '4x8';
         $area = (float)$f['area'];

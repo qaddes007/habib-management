@@ -169,7 +169,9 @@ try {
 
         if ($row['bill_category'] === 'pipe_grill') {
             $gauge = $row['pipe_gauge'] ?: $row['gauge'] ?: '';
-        } elseif (in_array($row['bill_category'], ['cnc_only', 'cnc_pipe'], true)) {
+        } elseif ($row['bill_category'] === 'cnc_only') {
+            $gauge = $row['gauge'] ?: $row['cnc_gauge'] ?: '';
+        } elseif ($row['bill_category'] === 'cnc_pipe') {
             $gauge = $row['cnc_gauge'] ?: $row['gauge'] ?: '';
         } else {
             $gauge = $row['gauge'] ?: $row['cnc_gauge'] ?: '';
