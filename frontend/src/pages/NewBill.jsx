@@ -678,7 +678,7 @@ export default function NewBill({ toast }) {
   const navigate = useNavigate()
   const { id: editId } = useParams()
   const isEdit = !!editId
-  const [srNo, setSrNo] = useState('â€¦')
+  const [srNo, setSrNo] = useState('…')
   const [billId, setBillId] = useState(null)
   const [locked, setLocked] = useState(false)
   const [clientName, setClientName] = useState('')
@@ -880,13 +880,13 @@ export default function NewBill({ toast }) {
     }
   }
 
-  if (loadingEdit) return <div className="loading">Loading billâ€¦</div>
+  if (loadingEdit) return <div className="loading">Loading bill…</div>
 
   return (
     <div className="container">
       <div className="page-title">
         <span>{isEdit ? 'Edit Bill' : 'Create New Bill'} — SR# <span className="text-gold">{srNo}</span>
-          {locked && <span style={{marginLeft:12,fontSize:'0.85rem',color:'#dc2626'}}>ðŸ”’ Locked (PAID + 30 days)</span>}
+          {locked && <span style={{marginLeft:12,fontSize:'0.85rem',color:'#dc2626'}}>🔒 Locked (PAID + 30 days)</span>}
         </span>
       </div>
 
@@ -986,5 +986,3 @@ export default function NewBill({ toast }) {
     </div>
   )
 }
-
-
