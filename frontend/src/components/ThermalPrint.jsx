@@ -270,8 +270,7 @@ export default function ThermalPrint({ bill, onClose }) {
                 )}
                 {frames.map((f, i) => {
                   const isBendOnly = f.bill_category === 'bending_only'
-                  const usesSelectedGauge = ['bending_only', 'sheet_sale', 'only_cutting', 'fancy'].includes(f.bill_category)
-                  const gauge = normalizeGaugeText((usesSelectedGauge ? f.gauge : f.cnc_gauge) || f.gauge || '').replace(/ Gauge/gi, '')
+                  const gauge = normalizeGaugeText((f.bill_category === 'pipe_grill' ? f.pipe_gauge : f.gauge || f.cnc_gauge) || '').replace(/ Gauge/gi, '')
                   const mat = (f.material || f.cnc_material || '—').slice(0, 14)
                   const catLabel = CAT_LABELS[f.bill_category] || ''
                   const w = Number(f.width) || 0
