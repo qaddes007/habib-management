@@ -401,7 +401,7 @@ function FrameCard({ frame, index, onChange, onRemove, canRemove, stockRows }) {
         {/* ===== CNC + PIPE ===== */}
         {cat === 'cnc_pipe' && (
           <>
-            {/* Tag checkboxes â€” Frame Pipe / Gola / Master + Color / Fitting same row */}
+            {/* Tag checkboxes — Frame Pipe / Gola / Master + Color / Fitting same row */}
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Tags / Options</label>
               <div style={{
@@ -710,7 +710,7 @@ export default function NewBill({ toast }) {
         }
         if (isLocked(b)) {
           setLocked(true)
-          toast('This bill is PAID and older than 30 days â€” locked (print only)', true)
+          toast('This bill is PAID and older than 30 days — locked (print only)', true)
         }
         setBillId(b.id)
         setSrNo(b.sr_no)
@@ -858,7 +858,7 @@ export default function NewBill({ toast }) {
         }),
         personal_expenses: [],
       }
-      if (locked) { toast('Bill is locked â€” cannot edit', true); return }
+      if (locked) { toast('Bill is locked — cannot edit', true); return }
       if (isEdit && billId) {
         payload.id = billId
         const res = await api.updateBill(payload)
@@ -885,7 +885,7 @@ export default function NewBill({ toast }) {
   return (
     <div className="container">
       <div className="page-title">
-        <span>{isEdit ? 'Edit Bill' : 'Create New Bill'} â€” SR# <span className="text-gold">{srNo}</span>
+        <span>{isEdit ? 'Edit Bill' : 'Create New Bill'} — SR# <span className="text-gold">{srNo}</span>
           {locked && <span style={{marginLeft:12,fontSize:'0.85rem',color:'#dc2626'}}>ðŸ”’ Locked (PAID + 30 days)</span>}
         </span>
       </div>
@@ -986,3 +986,5 @@ export default function NewBill({ toast }) {
     </div>
   )
 }
+
+
