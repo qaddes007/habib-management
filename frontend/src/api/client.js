@@ -122,6 +122,7 @@ function queuedWriteKind(url, method, body) {
   if (parsed.pathname.endsWith('/expenses.php') && !action) return 'expense';
   if (parsed.pathname.endsWith('/expenses.php') && action === 'update') return 'expense_update';
   if (parsed.pathname.endsWith('/stock.php') && ['add', 'update'].includes(action) && !body?.id) return 'stock';
+  if (parsed.pathname.endsWith('/stock.php') && action === 'update' && body?.id) return 'stock_update';
   if (parsed.pathname.endsWith('/stock.php') && action === 'adjust' && Number(body?.id) !== 0) return 'stock_adjust';
   return null;
 }
@@ -187,6 +188,18 @@ function enqueueOfflineWrite(url, method, body, kind, mutationId = crypto.random
       return { success: true, id: recordId, pending: true };
     }
   }
+  if (kind === 'stock_update' && recordId < 0) {
+    const pendingStock = outbox.find(item => item.kind === 'stock' && item.localId === recordId);
+    if (pendingStock) {
+      pendingStock.body = { ...operationBody };
+      delete pendingStock.body.id;
+      delete pendingStock.failed;
+      saveOutbox(outbox.filter(item =>
+        !(['stock_update', 'stock_adjust'].includes(item.kind) && Number(item.body.id) === recordId)
+      ));
+      return { success: true, id: recordId, pending: true };
+    }
+  }
 
   const createKind = kind === 'bill_delete' ? 'bill' : kind === 'expense_delete' ? 'expense' : 'stock';
   const pendingCreate = ['bill_delete', 'expense_delete', 'stock_delete'].includes(kind)
@@ -206,7 +219,7 @@ function enqueueOfflineWrite(url, method, body, kind, mutationId = crypto.random
     return { success: true, pending: true };
   }
 
-  const updateKinds = ['bill_update', 'expense_update'];
+  const updateKinds = ['bill_update', 'expense_update', 'stock_update'];
   if (updateKinds.includes(kind)) {
     const deleteKind = kind.replace('_update', '_delete');
     const withoutQueuedDelete = outbox.filter(item =>
@@ -404,7 +417,9 @@ function calculatePendingBill(operation, existingBill = null) {
           ? Number(frame.direct_price) || 0
       : frame.bill_category === 'bending_only'
         ? bend
-        : area * (Number(frame.rate) || 0) + (frame.bill_category === 'bending_sheet' ? bend : 0);
+        : frame.bill_category === 'bending_sheet'
+          ? bend
+          : area * (Number(frame.rate) || 0);
     total += Number(frame.extra_item_price) || 0;
     return { ...frame, id: `pending-${index}`, serial: index + 1, area, total, tags: frame.tags || [] };
   });
@@ -524,6 +539,14 @@ function applyPendingStockChanges(rows, queue) {
       if (existing) {
         existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + (Number(operation.body.delta) || 0));
         existing.pending_changes = true;
+      }
+      continue;
+    }
+
+    if (operation.kind === 'stock_update') {
+      const existing = rows.find(row => Number(row.id) === resolveOfflineRecordId('stock', operation.body.id));
+      if (existing) {
+        Object.assign(existing, operation.body, { pending_changes: true });
       }
       continue;
     }

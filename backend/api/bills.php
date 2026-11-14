@@ -171,10 +171,7 @@ try {
                     } elseif ($cat === 'bending_only') {
                         $total = $bendTotal;
                     } elseif ($cat === 'bending_sheet') {
-                        $w = (float)($f['width'] ?? 0);
-                        $l = (float)($f['length'] ?? 0);
-                        $r = (float)($f['rate'] ?? 0);
-                        $total = $w * $l * $pcs * $r + $bendTotal;
+                        $total = $bendTotal;
                     } else {
                         $w = (float)($f['width'] ?? 0);
                         $l = (float)($f['length'] ?? 0);
@@ -281,7 +278,7 @@ try {
                         $total = $bendTotal + $extra;
                     } elseif ($cat === 'bending_sheet') {
                         $area = $w * $l * $pcs;
-                        $total = $area * $r + $bendTotal + $extra;
+                        $total = $bendTotal + $extra;
                     } else {
                         $area = $w * $l * $pcs;
                         $total = $area * $r + $extra;
